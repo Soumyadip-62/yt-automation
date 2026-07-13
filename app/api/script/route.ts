@@ -16,9 +16,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const script = await generateScript(topic);
+    const result = await generateScript(topic);
 
-    return Response.json({ script });
+    return Response.json(result);
   } catch (error) {
     console.error(error);
 
