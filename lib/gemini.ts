@@ -12,6 +12,7 @@ export interface VideoMetadata {
 
 export interface SceneAsset {
   type: string;
+  nasaQuery: string;
   query: string;
 }
 
@@ -96,6 +97,11 @@ ${script}
 
 Create a scene-by-scene breakdown for YouTube Shorts/Reels.
 Each scene should be 3-5 seconds.
+For each asset, include both:
+- query: an image/video generation prompt with useful visual detail.
+- nasaQuery: NASA image/video library search keywords.
+For nasaQuery, use 2-5 plain searchable words like object names, mission names, planets, galaxies, nebulae, astronauts, rockets, spacecraft, Earth views, or telescope names.
+Do NOT use words like realistic, cinematic, dramatic, style, background, render, animation, illustration, 4k, or NASA style in nasaQuery.
 
 Return a JSON object matching this example format:
 {
@@ -107,7 +113,8 @@ Return a JSON object matching this example format:
       "narration": "Imagine falling into a black hole.",
       "asset": {
         "type": "image",
-        "query": "realistic black hole in space NASA style"
+        "query": "realistic black hole in deep space with glowing accretion disk, high contrast",
+        "nasaQuery": "black hole"
       },
       "caption": "BLACK HOLE",
       "animation": "zoom"
@@ -117,7 +124,8 @@ Return a JSON object matching this example format:
       "narration": "Its gravity is so strong that even light cannot escape.",
       "asset": {
         "type": "image",
-        "query": "realistic black hole in space NASA style"
+        "query": "dramatic close-up of a black hole accretion disk bending light in space",
+        "nasaQuery": "black hole accretion disk"
       },
       "caption": "LIGHT CAN'T ESCAPE",
       "animation": "parallax"
