@@ -1,0 +1,35 @@
+{
+  "readme": "To open this file inside VSCode, you need to install Thor Client extension https://thorclient.com/",
+  "request": {
+    "url": {
+      "raw": "https://images-api.nasa.gov/search?q=black%20hole&media_type=image",
+      "query": [
+        {
+          "id": "9e0f2497-1393-4f22-88b6-9f86ce9d219e",
+          "key": "q",
+          "value": "black hole",
+          "type": "string",
+          "isFound": true
+        },
+        {
+          "id": "2bed3cd7-9466-4d41-aa81-b8cf70f9db05",
+          "key": "media_type",
+          "value": "image",
+          "type": "string",
+          "isFound": true
+        }
+      ]
+    }
+  },
+  "event": {
+    "assert": [
+      {
+        "key": "response.status",
+        "value": "200",
+        "disabled": false,
+        "type": "text",
+        "operator": "=="
+      }
+    ]
+  }
+}

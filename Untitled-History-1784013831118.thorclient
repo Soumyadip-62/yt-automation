@@ -1,0 +1,35 @@
+{
+  "readme": "To open this file inside VSCode, you need to install Thor Client extension https://thorclient.com/",
+  "request": {
+    "url": {
+      "raw": "https://images-api.nasa.gov/search?q=black hole event horizon&media_type=video",
+      "query": [
+        {
+          "id": "b5edb4bf-d273-4dbf-a5a1-a73a8d680782",
+          "key": "q",
+          "value": "black hole event horizon",
+          "type": "string",
+          "isFound": true
+        },
+        {
+          "id": "77804fb3-cf52-49df-a395-5751026706ad",
+          "key": "media_type",
+          "value": "video",
+          "type": "string",
+          "isFound": true
+        }
+      ]
+    }
+  },
+  "event": {
+    "assert": [
+      {
+        "key": "response.status",
+        "value": "200",
+        "disabled": false,
+        "type": "text",
+        "operator": "=="
+      }
+    ]
+  }
+}
