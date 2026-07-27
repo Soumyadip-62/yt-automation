@@ -9,7 +9,7 @@ import {
 } from "remotion";
 import type { CSSProperties } from "react";
 import type { RenderPlan, RenderScene } from "../types/render-plan";
-import { VIDEO_FPS } from "./constants";
+import { VIDEO_FPS, VIDEO_WIDTH } from "./constants";
 
 export const defaultRenderPlan: RenderPlan = {
   audioLoop: false,
@@ -78,6 +78,26 @@ function getMotionStyle(
   return {};
 }
 
+function getCaptionFontSize(text: string) {
+  const cleanText = text.trim();
+  const longestWord = cleanText
+    .split(/\s+/)
+    .reduce((longest, word) => Math.max(longest, word.length), 0);
+  const availableWidth = VIDEO_WIDTH - 144;
+
+  for (let size = 68; size >= 38; size -= 2) {
+    const estimatedCharsPerLine = Math.floor(availableWidth / (size * 0.58));
+    const estimatedLines = Math.ceil(cleanText.length / estimatedCharsPerLine);
+    const longestWordWidth = longestWord * size * 0.58;
+
+    if (estimatedLines <= 3 && longestWordWidth <= availableWidth) {
+      return size;
+    }
+  }
+
+  return 38;
+}
+
 function SceneView({
   scene,
   sceneIndex,
@@ -112,8 +132,13 @@ function SceneView({
         ? sceneWords.length - 1
         : 0;
   const visibleWordIndex = activeWordIndex >= 0 ? activeWordIndex : 0;
-  const chunkStart = Math.floor(visibleWordIndex / 6) * 6;
-  const visibleWords = sceneWords.slice(chunkStart, chunkStart + 6);
+  const chunkStart = Math.floor(visibleWordIndex / 4) * 4;
+  const visibleWords = sceneWords.slice(chunkStart, chunkStart + 4);
+  const captionText =
+    visibleWords.length > 0
+      ? visibleWords.map((timing) => timing.word).join(" ")
+      : scene.caption;
+  const captionFontSize = getCaptionFontSize(captionText);
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#020617", overflow: "hidden" }}>
@@ -147,17 +172,22 @@ function SceneView({
       {scene.captionEnabled && (scene.caption || visibleWords.length > 0) ? (
         <div
           style={{
-            bottom: 180,
+            bottom: 160,
             color: "white",
             fontFamily: "Arial, sans-serif",
-            fontSize: 78,
+            fontSize: captionFontSize,
             fontWeight: 800,
             left: 72,
-            lineHeight: 1.05,
+            lineHeight: 1.08,
+            maxHeight: 320,
+            overflow: "hidden",
+            overflowWrap: "anywhere",
             position: "absolute",
             right: 72,
             textAlign: "center",
             textShadow: "0 4px 18px rgba(0,0,0,0.85)",
+            whiteSpace: "normal",
+            wordBreak: "normal",
           }}
         >
           {visibleWords.length > 0
@@ -169,7 +199,7 @@ function SceneView({
                     style={{
                       color:
                         absoluteIndex === activeWordIndex ? "#22d3ee" : "white",
-                      marginRight: 18,
+                      marginRight: 12,
                       textShadow:
                         absoluteIndex === activeWordIndex
                           ? "0 0 24px rgba(34,211,238,0.65), 0 4px 18px rgba(0,0,0,0.85)"
