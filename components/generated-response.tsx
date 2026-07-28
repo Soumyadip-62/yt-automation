@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Film } from "lucide-react";
 import { AssetsTab } from "@/components/assets-tab";
 import { MetadataTab } from "@/components/metadata-tab";
 import { ResponseTabs, type ResponseTab } from "@/components/response-tabs";
@@ -15,6 +16,7 @@ type GeneratedResponseProps = {
   data: ScriptResponse | null;
   isAssetLoading: boolean;
   isLoading: boolean;
+  onEditVideo: () => void;
   onSelectAsset: (sceneIndex: number, asset: Asset) => void;
   selectedAssetsByScene: Record<number, Asset>;
 };
@@ -25,11 +27,15 @@ export function GeneratedResponse({
   data,
   isAssetLoading,
   isLoading,
+  onEditVideo,
   onSelectAsset,
   selectedAssetsByScene,
 }: GeneratedResponseProps) {
   const [activeTab, setActiveTab] = useState<ResponseTab>("script");
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const selectedAssetCount = Object.keys(selectedAssetsByScene).length;
+  const sceneCount = data?.scenebreakdown.scenes.length ?? 0;
+  const canEditVideo = sceneCount > 0 && selectedAssetCount === sceneCount;
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -42,11 +48,29 @@ export function GeneratedResponse({
       aria-live="polite"
       className="flex min-h-[520px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
     >
-      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/50 px-5 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/50 px-5 py-4">
         <h2 className="text-lg font-semibold">Generated response</h2>
-        <span className="rounded-md border border-cyan-100 bg-cyan-50 px-3 py-1 text-sm font-medium text-cyan-700">
-          Gemini
-        </span>
+        <div className="flex items-center gap-2">
+          {data ? (
+            <button
+              type="button"
+              disabled={!canEditVideo}
+              onClick={onEditVideo}
+              className="flex h-9 cursor-pointer items-center gap-2 rounded-md bg-slate-950 px-3 text-sm font-semibold text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              title={
+                canEditVideo
+                  ? "Open video editor"
+                  : `Select assets for ${sceneCount - selectedAssetCount} more scenes`
+              }
+            >
+              <Film aria-hidden="true" size={16} />
+              Edit &amp; render
+            </button>
+          ) : null}
+          <span className="rounded-md border border-cyan-100 bg-cyan-50 px-3 py-1 text-sm font-medium text-cyan-700">
+            Gemini
+          </span>
+        </div>
       </div>
 
       {data ? (

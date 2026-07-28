@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AI Shorts Generator",
-  description: "Auto generate shorts scripts using AI",
+  title: "AI Space Shorts Studio",
+  description: "Generate, edit, and render educational space Shorts.",
 };
 
 export default function RootLayout({

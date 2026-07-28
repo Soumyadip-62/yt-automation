@@ -2,13 +2,17 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { GeneratedResponse } from "@/components/generated-response";
+import { useRenderPlan } from "@/components/render-plan-provider";
 import { generateScriptRequest } from "@/lib/api/script";
 import Header from "@/components/header";
 import { getAssetsRequestFromSceneAssets } from "@/lib/api/assets";
 import type { Asset } from "@/lib/nasa";
 
 export default function Home() {
+  const router = useRouter();
+  const { setRenderPlan } = useRenderPlan();
   const [topic, setTopic] = useState("");
   const [error, setError] = useState("");
   const [selectedAssetsByScene, setSelectedAssetsByScene] = useState<
@@ -55,6 +59,50 @@ export default function Home() {
     assetMutation.reset();
     setSelectedAssetsByScene({});
     scriptMutation.mutate(trimmedTopic);
+  }
+
+  function handleOpenEditor() {
+    if (!scriptData) return;
+
+    const scenes = scriptData.scenebreakdown.scenes;
+    const hasEveryAsset = scenes.every(
+      (_, sceneIndex) => selectedAssetsByScene[sceneIndex],
+    );
+
+    if (!hasEveryAsset) {
+      setError("Select one asset for every scene before opening the editor.");
+      return;
+    }
+
+    setError("");
+    setRenderPlan({
+      audioLoop: false,
+      audioUrl: "",
+      audioVolume: 0.5,
+      musicDucking: 0.65,
+      musicFadeInSeconds: 1,
+      musicFadeOutSeconds: 2,
+      musicLoop: true,
+      musicUrl: "",
+      musicVolume: 0.18,
+      sceneTimings: [],
+      script: scriptData.script,
+      metadata: scriptData.metadata,
+      selectedAssetsByScene,
+      scenes: scenes.map((scene) => ({
+        ...scene,
+        captionEnabled: true,
+        fit: "cover",
+        motion:
+          scene.animation === "zoom"
+            ? "zoom-in"
+            : scene.animation === "parallax"
+              ? "pan-left"
+              : "none",
+      })),
+      wordTimings: [],
+    });
+    router.push("/editor");
   }
 
   return (
@@ -108,6 +156,7 @@ export default function Home() {
             data={scriptData}
             isAssetLoading={assetMutation.isPending}
             isLoading={isLoading}
+            onEditVideo={handleOpenEditor}
             onSelectAsset={(sceneIndex, asset) =>
               setSelectedAssetsByScene((current) => ({
                 ...current,

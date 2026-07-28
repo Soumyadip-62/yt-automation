@@ -15,10 +15,12 @@
 
 # next.js
 /.next/
+/.remotion-bundle/
 /out/
 
 # production
 /build
+/public/videos/*.mp4
 
 # misc
 .DS_Store
