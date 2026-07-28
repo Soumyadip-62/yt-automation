@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
-import path from "node:path";
 import type { VideoMetadata } from "@/lib/gemini";
+import { getRenderedVideoPath, getRenderIdFromVideoUrl } from "@/lib/rendered-video";
 
 const YOUTUBE_SCOPE = "https://www.googleapis.com/auth/youtube.upload";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -175,22 +175,7 @@ export function buildYoutubeDescription(metadata: VideoMetadata) {
 }
 
 function resolveRenderedVideoPath(videoUrl: string) {
-  if (!videoUrl.startsWith("/videos/") || !videoUrl.endsWith(".mp4")) {
-    throw new Error("Upload a rendered MP4 from this app.");
-  }
-
-  const videoPath = path.resolve(
-    process.cwd(),
-    "public",
-    videoUrl.replace(/^\//, ""),
-  );
-  const videoDirectory = path.resolve(process.cwd(), "public", "videos");
-
-  if (!videoPath.startsWith(`${videoDirectory}${path.sep}`)) {
-    throw new Error("Invalid rendered video path.");
-  }
-
-  return videoPath;
+  return getRenderedVideoPath(getRenderIdFromVideoUrl(videoUrl));
 }
 
 async function getAccessToken({

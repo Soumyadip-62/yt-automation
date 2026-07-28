@@ -172,7 +172,7 @@ function SceneView({
       {scene.captionEnabled && (scene.caption || visibleWords.length > 0) ? (
         <div
           style={{
-            bottom: 240,
+            bottom: 320,
             color: "white",
             fontFamily: "Arial, sans-serif",
             fontSize: captionFontSize,

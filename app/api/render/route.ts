@@ -4,6 +4,11 @@ import { mkdir } from "node:fs/promises";
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import { NextResponse } from "next/server";
+import {
+  getRenderedVideoDirectory,
+  getRenderedVideoPath,
+  getRenderedVideoUrl,
+} from "@/lib/rendered-video";
 import { COMPOSITION_ID } from "@/remotion/constants";
 import type { RenderPlan } from "@/types/render-plan";
 
@@ -148,10 +153,9 @@ export async function POST(request: Request) {
       serveUrl,
     });
     const renderId = randomUUID();
-    const outputDirectory = path.join(process.cwd(), "public", "videos");
-    const outputLocation = path.join(outputDirectory, `${renderId}.mp4`);
+    const outputLocation = getRenderedVideoPath(renderId);
 
-    await mkdir(outputDirectory, { recursive: true });
+    await mkdir(getRenderedVideoDirectory(), { recursive: true });
     await renderMedia({
       codec: "h264",
       composition,
@@ -162,7 +166,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       renderId,
-      videoUrl: `/videos/${renderId}.mp4`,
+      videoUrl: getRenderedVideoUrl(renderId),
     });
   } catch (error) {
     console.error("Video render failed:", error);
