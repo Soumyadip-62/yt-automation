@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { put } from "@vercel/blob";
 import {
   addBundleToSandbox,
   createSandbox,
@@ -115,6 +116,41 @@ function validateRenderPlan(value: unknown): value is RenderPlan {
   });
 }
 
+async function ensureBlobAudioUrl(
+  url: string,
+  blobToken: string,
+  filenamePrefix: string,
+): Promise<string> {
+  if (!url || !url.startsWith("data:")) {
+    return url;
+  }
+
+  try {
+    const matches = url.match(/^data:([^;]+);base64,(.+)$/);
+    if (!matches) return url;
+
+    const contentType = matches[1] || "audio/wav";
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, "base64");
+    const extension = contentType.split("/")[1] || "wav";
+    const filename = `renders/inputs/${filenamePrefix}-${randomUUID()}.${extension}`;
+
+    const blob = await put(filename, buffer, {
+      access: "public",
+      contentType,
+      token: blobToken,
+    });
+
+    return blob.url;
+  } catch (error) {
+    console.error(
+      `Failed to upload ${filenamePrefix} data URL to Vercel Blob:`,
+      error,
+    );
+    return url;
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const plan = (await request.json()) as unknown;
@@ -138,6 +174,23 @@ export async function POST(request: Request) {
       );
     }
 
+    const sanitizedAudioUrl = await ensureBlobAudioUrl(
+      plan.audioUrl,
+      blobToken,
+      "audio",
+    );
+    const sanitizedMusicUrl = await ensureBlobAudioUrl(
+      plan.musicUrl,
+      blobToken,
+      "music",
+    );
+
+    const sanitizedPlan: RenderPlan = {
+      ...plan,
+      audioUrl: sanitizedAudioUrl,
+      musicUrl: sanitizedMusicUrl,
+    };
+
     const renderId = randomUUID();
     const sandbox = await createSandbox({
       resources: { vcpus: 4 },
@@ -152,7 +205,7 @@ export async function POST(request: Request) {
       compositionId: COMPOSITION_ID,
       detached: true,
       detachedSandboxTimeoutInMilliseconds: 10 * 60 * 1000,
-      inputProps: plan,
+      inputProps: sanitizedPlan,
       outputFile: `/tmp/${renderId}.mp4`,
       sandbox,
       timeoutInMilliseconds: 4 * 60 * 1000,
@@ -176,3 +229,4 @@ export async function POST(request: Request) {
     );
   }
 }
+
