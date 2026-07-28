@@ -66,6 +66,9 @@ importers:
       tailwindcss:
         specifier: ^4
         version: 4.3.2
+      terser-webpack-plugin:
+        specifier: ^5.6.1
+        version: 5.6.1(esbuild@0.28.1)(postcss@8.5.19)(webpack@5.105.0(postcss@8.5.19))
       tsx:
         specifier: ^4.23.1
         version: 4.23.1
@@ -3589,13 +3592,13 @@ snapshots:
       '@remotion/timeline-utils': 4.0.498
       '@rspack/core': 1.7.11(@swc/helpers@0.5.15)
       '@rspack/plugin-react-refresh': 1.6.1(react-refresh@0.18.0)
-      css-loader: 7.1.4(@rspack/core@1.7.11(@swc/helpers@0.5.15))(webpack@5.105.0(esbuild@0.28.1)(postcss@8.5.19))
+      css-loader: 7.1.4(@rspack/core@1.7.11(@swc/helpers@0.5.15))(webpack@5.105.0(postcss@8.5.19))
       esbuild: 0.28.1
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
       react-refresh: 0.18.0
       remotion: 4.0.498(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      style-loader: 4.0.0(webpack@5.105.0(esbuild@0.28.1)(postcss@8.5.19))
+      style-loader: 4.0.0(webpack@5.105.0(postcss@8.5.19))
       webpack: 5.105.0(esbuild@0.28.1)(postcss@8.5.19)
     transitivePeerDependencies:
       - '@minify-html/node'
@@ -4430,7 +4433,7 @@ snapshots:
       shebang-command: 2.0.0
       which: 2.0.2
 
-  css-loader@7.1.4(@rspack/core@1.7.11(@swc/helpers@0.5.15))(webpack@5.105.0(esbuild@0.28.1)(postcss@8.5.19)):
+  css-loader@7.1.4(@rspack/core@1.7.11(@swc/helpers@0.5.15))(webpack@5.105.0(postcss@8.5.19)):
     dependencies:
       icss-utils: 5.1.0(postcss@8.5.19)
       postcss: 8.5.19
@@ -5960,7 +5963,7 @@ snapshots:
 
   strip-json-comments@3.1.1: {}
 
-  style-loader@4.0.0(webpack@5.105.0(esbuild@0.28.1)(postcss@8.5.19)):
+  style-loader@4.0.0(webpack@5.105.0(postcss@8.5.19)):
     dependencies:
       webpack: 5.105.0(esbuild@0.28.1)(postcss@8.5.19)
 

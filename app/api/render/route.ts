@@ -1,8 +1,8 @@
+import { readdir, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { put } from "@vercel/blob";
 import {
-  addBundleToSandbox,
   createSandbox,
   renderMediaOnVercel,
 } from "@remotion/vercel";
@@ -14,6 +14,111 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const REMOTION_BUNDLE_DIR = path.join(process.cwd(), ".remotion-bundle");
+const REMOTION_SANDBOX_BUNDLE_DIR = "remotion-bundle";
+
+const toPosixPath = (filePath: string) => filePath.split(/[/\\]/).join("/");
+
+const getAncestorDirectories = (relativePath: string) => {
+  const normalized = toPosixPath(relativePath);
+  const parts = normalized.split("/").filter(Boolean);
+  const dirs: string[] = [];
+  for (let i = 0; i < parts.length - 1; i++) {
+    dirs.push(parts.slice(0, i + 1).join("/"));
+  }
+  return dirs;
+};
+
+const toSandboxBundlePath = (relativePath: string) =>
+  `${REMOTION_SANDBOX_BUNDLE_DIR}/${toPosixPath(relativePath)}`;
+
+async function getRemotionBundleFiles(bundleDir: string) {
+  const fullBundleDir = path.resolve(bundleDir);
+  const files: { path: string; content: Buffer }[] = [];
+
+  async function readDirRecursive(dir: string, basePath = "") {
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      const relativePath = path.join(basePath, entry.name);
+      if (entry.isDirectory()) {
+        await readDirRecursive(fullPath, relativePath);
+      } else {
+        const content = await readFile(fullPath);
+        files.push({ path: toPosixPath(relativePath), content });
+      }
+    }
+  }
+
+  await readDirRecursive(fullBundleDir);
+  return files;
+}
+
+const collectBundleDirectories = (bundleFiles: { path: string }[]) => {
+  const dirs = new Set<string>();
+  for (const file of bundleFiles) {
+    for (const dir of getAncestorDirectories(file.path)) {
+      dirs.add(dir);
+    }
+  }
+  return Array.from(dirs).sort();
+};
+
+async function addBundleToSandboxBatched({
+  sandbox,
+  bundleDir,
+  maxBatchSizeBytes = 400_000,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sandbox: any;
+  bundleDir: string;
+  maxBatchSizeBytes?: number;
+}) {
+  const bundleFiles = await getRemotionBundleFiles(bundleDir);
+  const directories = collectBundleDirectories(bundleFiles);
+
+  for (const dir of directories) {
+    const sandboxPath = toSandboxBundlePath(dir);
+    try {
+      await sandbox.mkDir(sandboxPath);
+    } catch {
+      // Directory may already exist
+    }
+  }
+
+  let currentBatch: { path: string; content: Buffer }[] = [];
+  let currentBatchBytes = 0;
+
+  for (const file of bundleFiles) {
+    const fileBytes = file.content.byteLength;
+
+    if (
+      currentBatch.length > 0 &&
+      currentBatchBytes + fileBytes > maxBatchSizeBytes
+    ) {
+      await sandbox.writeFiles(
+        currentBatch.map((f) => ({
+          path: toSandboxBundlePath(f.path),
+          content: f.content,
+        })),
+      );
+      currentBatch = [];
+      currentBatchBytes = 0;
+    }
+
+    currentBatch.push(file);
+    currentBatchBytes += fileBytes;
+  }
+
+  if (currentBatch.length > 0) {
+    await sandbox.writeFiles(
+      currentBatch.map((f) => ({
+        path: toSandboxBundlePath(f.path),
+        content: f.content,
+      })),
+    );
+  }
+}
+
 
 function isRemoteHttpsUrl(value: unknown): boolean {
   if (typeof value !== "string") return false;
@@ -197,8 +302,8 @@ export async function POST(request: Request) {
       timeoutInMilliseconds: 5 * 60 * 1000,
     });
 
-    await sandbox.mkDir("remotion-bundle");
-    await addBundleToSandbox({ bundleDir: REMOTION_BUNDLE_DIR, sandbox });
+    await addBundleToSandboxBatched({ bundleDir: REMOTION_BUNDLE_DIR, sandbox });
+
 
     const { cmdId, sandboxId } = await renderMediaOnVercel({
       codec: "h264",
