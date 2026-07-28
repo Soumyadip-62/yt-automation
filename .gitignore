@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.remotion-bundle/
 /out/
 
 # production

@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { bundle } from "@remotion/bundler";
 import {
   addBundleToSandbox,
   createSandbox,
@@ -13,21 +12,7 @@ import type { RenderPlan } from "@/types/render-plan";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-let bundlePromise: Promise<string> | null = null;
-
-function getBundle() {
-  if (!bundlePromise) {
-    bundlePromise = bundle({
-      entryPoint: path.join(process.cwd(), "remotion/index.ts"),
-      publicDir: path.join(process.cwd(), "public"),
-    }).catch((error) => {
-      bundlePromise = null;
-      throw error;
-    });
-  }
-
-  return bundlePromise;
-}
+const REMOTION_BUNDLE_DIR = path.join(process.cwd(), ".remotion-bundle");
 
 function isRemoteHttpsUrl(value: unknown): boolean {
   if (typeof value !== "string") return false;
@@ -153,14 +138,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const bundleDir = await getBundle();
     const renderId = randomUUID();
     const sandbox = await createSandbox({
       resources: { vcpus: 4 },
       timeoutInMilliseconds: 5 * 60 * 1000,
     });
 
-    await addBundleToSandbox({ bundleDir, sandbox });
+    await addBundleToSandbox({ bundleDir: REMOTION_BUNDLE_DIR, sandbox });
 
     const { cmdId, sandboxId } = await renderMediaOnVercel({
       codec: "h264",
