@@ -1,6 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
 import type { VideoMetadata } from "@/lib/gemini";
-import { getRenderedVideoPath, getRenderIdFromVideoUrl } from "@/lib/rendered-video";
 
 const YOUTUBE_SCOPE = "https://www.googleapis.com/auth/youtube.upload";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -174,8 +172,24 @@ export function buildYoutubeDescription(metadata: VideoMetadata) {
   return `${metadata.description.trim()}\n\n${hashtags}`.trim();
 }
 
-function resolveRenderedVideoPath(videoUrl: string) {
-  return getRenderedVideoPath(getRenderIdFromVideoUrl(videoUrl));
+async function getVideoUploadBody(videoUrl: string) {
+  if (!videoUrl.startsWith("https://")) {
+    throw new Error("Upload a rendered Vercel Blob video URL.");
+  }
+
+  const response = await fetch(videoUrl);
+
+  if (!response.ok) {
+    throw new Error("Could not fetch rendered video for YouTube upload.");
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+
+  return {
+    body: buffer,
+    contentLength: buffer.length,
+    contentType: response.headers.get("content-type") || "video/mp4",
+  };
 }
 
 async function getAccessToken({
@@ -208,9 +222,7 @@ export async function uploadVideoToYoutube({
   tokens: YoutubeTokens;
 }): Promise<YoutubeUploadResult> {
   const accessToken = await getAccessToken({ origin, tokens });
-  const videoPath = resolveRenderedVideoPath(input.videoUrl);
-  const videoStats = await stat(videoPath);
-  const videoBuffer = await readFile(videoPath);
+  const video = await getVideoUploadBody(input.videoUrl);
   const metadata = {
     snippet: {
       categoryId: "28",
@@ -233,8 +245,8 @@ export async function uploadVideoToYoutube({
         Authorization: `Bearer ${accessToken}`,
         "Content-Length": String(Buffer.byteLength(JSON.stringify(metadata))),
         "Content-Type": "application/json; charset=UTF-8",
-        "X-Upload-Content-Length": String(videoStats.size),
-        "X-Upload-Content-Type": "video/mp4",
+        "X-Upload-Content-Length": String(video.contentLength),
+        "X-Upload-Content-Type": video.contentType,
       },
       method: "POST",
     },
@@ -247,11 +259,11 @@ export async function uploadVideoToYoutube({
   }
 
   const uploadResponse = await fetch(uploadLocation, {
-    body: videoBuffer,
+    body: video.body,
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "Content-Length": String(videoStats.size),
-      "Content-Type": "video/mp4",
+      "Content-Length": String(video.contentLength),
+      "Content-Type": video.contentType,
     },
     method: "PUT",
   });

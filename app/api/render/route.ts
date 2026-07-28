@@ -1,14 +1,13 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { mkdir } from "node:fs/promises";
 import { bundle } from "@remotion/bundler";
-import { renderMedia, selectComposition } from "@remotion/renderer";
-import { NextResponse } from "next/server";
 import {
-  getRenderedVideoDirectory,
-  getRenderedVideoPath,
-  getRenderedVideoUrl,
-} from "@/lib/rendered-video";
+  addBundleToSandbox,
+  createSandbox,
+  renderMediaOnVercel,
+  uploadToVercelBlob,
+} from "@remotion/vercel";
+import { NextResponse } from "next/server";
 import { COMPOSITION_ID } from "@/remotion/constants";
 import type { RenderPlan } from "@/types/render-plan";
 
@@ -146,28 +145,50 @@ export async function POST(request: Request) {
       );
     }
 
-    const serveUrl = await getBundle();
-    const composition = await selectComposition({
-      id: COMPOSITION_ID,
-      inputProps: plan,
-      serveUrl,
-    });
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+
+    if (!blobToken) {
+      return NextResponse.json(
+        { error: "Set BLOB_READ_WRITE_TOKEN to store rendered videos." },
+        { status: 500 },
+      );
+    }
+
+    const bundleDir = await getBundle();
     const renderId = randomUUID();
-    const outputLocation = getRenderedVideoPath(renderId);
-
-    await mkdir(getRenderedVideoDirectory(), { recursive: true });
-    await renderMedia({
-      codec: "h264",
-      composition,
-      inputProps: plan,
-      outputLocation,
-      serveUrl,
+    const sandbox = await createSandbox({
+      resources: { vcpus: 4 },
+      timeoutInMilliseconds: 5 * 60 * 1000,
     });
 
-    return NextResponse.json({
-      renderId,
-      videoUrl: getRenderedVideoUrl(renderId),
-    });
+    try {
+      await addBundleToSandbox({ bundleDir, sandbox });
+
+      const { contentType, sandboxFilePath } = await renderMediaOnVercel({
+        codec: "h264",
+        compositionId: COMPOSITION_ID,
+        inputProps: plan,
+        outputFile: `/tmp/${renderId}.mp4`,
+        sandbox,
+        timeoutInMilliseconds: 4 * 60 * 1000,
+      });
+
+      const blob = await uploadToVercelBlob({
+        access: "public",
+        blobPath: `renders/${renderId}.mp4`,
+        blobToken,
+        contentType,
+        sandbox,
+        sandboxFilePath,
+      });
+
+      return NextResponse.json({
+        renderId,
+        videoUrl: blob.url,
+      });
+    } finally {
+      await sandbox.stop().catch(() => undefined);
+    }
   } catch (error) {
     console.error("Video render failed:", error);
     return NextResponse.json(

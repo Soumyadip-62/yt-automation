@@ -2,13 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
-    "/api/render": [
-      "./remotion/**/*",
-      "./node_modules/@remotion/bundler/renderEntry.tsx",
-      "./node_modules/.pnpm/@remotion+bundler@4.0.250_*/node_modules/@remotion/bundler/renderEntry.tsx",
-    ],
+    "/api/render": ["./remotion/**/*"],
   },
-  serverExternalPackages: ["@remotion/bundler", "@remotion/renderer"],
+  serverExternalPackages: [
+    "@remotion/bundler",
+    "@remotion/renderer",
+    "@remotion/vercel",
+    "@vercel/sandbox",
+  ],
 };
 
 export default nextConfig;
