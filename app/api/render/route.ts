@@ -144,6 +144,7 @@ export async function POST(request: Request) {
       timeoutInMilliseconds: 5 * 60 * 1000,
     });
 
+    await sandbox.mkDir("remotion-bundle");
     await addBundleToSandbox({ bundleDir: REMOTION_BUNDLE_DIR, sandbox });
 
     const { cmdId, sandboxId } = await renderMediaOnVercel({
