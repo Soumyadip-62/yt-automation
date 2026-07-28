@@ -47,6 +47,12 @@ type RenderResult = {
   videoUrl: string;
 };
 
+type YoutubeUploadResult = {
+  privacyStatus?: string;
+  videoId: string;
+  watchUrl: string;
+};
+
 type VoiceResult = {
   audioUrl: string;
   durationSeconds: number;
@@ -72,6 +78,15 @@ export default function EditorPage() {
   const [voiceStyle, setVoiceStyle] = useState<VoiceStyle>("Documentary");
   const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
   const [voiceError, setVoiceError] = useState("");
+  const [youtubePrivacy, setYoutubePrivacy] = useState<
+    "private" | "public" | "unlisted"
+  >("private");
+  const [isUploadingYoutube, setIsUploadingYoutube] = useState(false);
+  const [youtubeError, setYoutubeError] = useState("");
+  const [youtubeAuthUrl, setYoutubeAuthUrl] = useState("");
+  const [youtubeResult, setYoutubeResult] = useState<YoutubeUploadResult | null>(
+    null,
+  );
 
   useEffect(() => {
     if (draft) setRenderPlan(draft);
@@ -116,6 +131,16 @@ export default function EditorPage() {
     link.remove();
   }
 
+  function getYoutubeDescription(plan: RenderPlan) {
+    const hashtags = plan.metadata.hashtags.join(" ").trim();
+
+    if (!hashtags || plan.metadata.description.includes(hashtags)) {
+      return plan.metadata.description;
+    }
+
+    return `${plan.metadata.description.trim()}\n\n${hashtags}`.trim();
+  }
+
   function updateScene(patch: Partial<RenderScene>) {
     setDraft((current) => {
       if (!current) return current;
@@ -127,6 +152,7 @@ export default function EditorPage() {
       };
     });
     setRenderResult(null);
+    setYoutubeResult(null);
   }
 
   function updateAudio(
@@ -144,6 +170,7 @@ export default function EditorPage() {
   ) {
     setDraft((current) => (current ? { ...current, ...patch } : current));
     setRenderResult(null);
+    setYoutubeResult(null);
   }
 
   function updateMusic(
@@ -161,6 +188,7 @@ export default function EditorPage() {
   ) {
     setDraft((current) => (current ? { ...current, ...patch } : current));
     setRenderResult(null);
+    setYoutubeResult(null);
   }
 
   function selectMusicFile(file?: File) {
@@ -185,6 +213,7 @@ export default function EditorPage() {
     setIsGeneratingVoice(true);
     setVoiceError("");
     setRenderResult(null);
+    setYoutubeResult(null);
 
     try {
       const response = await fetch("/api/voice", {
@@ -261,6 +290,7 @@ export default function EditorPage() {
     setIsRendering(true);
     setRenderError("");
     setRenderResult(null);
+    setYoutubeResult(null);
 
     try {
       const response = await fetch("/api/render", {
@@ -282,6 +312,54 @@ export default function EditorPage() {
       );
     } finally {
       setIsRendering(false);
+    }
+  }
+
+  async function uploadToYoutube() {
+    if (!renderResult || !draft) return;
+
+    setIsUploadingYoutube(true);
+    setYoutubeError("");
+    setYoutubeAuthUrl("");
+    setYoutubeResult(null);
+
+    try {
+      const response = await fetch("/api/youtube/upload", {
+        body: JSON.stringify({
+          description: getYoutubeDescription(draft),
+          privacyStatus: youtubePrivacy,
+          tags: draft.metadata.hashtags,
+          title: draft.metadata.title,
+          videoUrl: renderResult.videoUrl,
+        }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      const result = (await response.json()) as Partial<YoutubeUploadResult> & {
+        authUrl?: string;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        if (result.authUrl) setYoutubeAuthUrl(result.authUrl);
+        throw new Error(result.error || "YouTube upload failed.");
+      }
+
+      if (!result.videoId || !result.watchUrl) {
+        throw new Error("YouTube upload finished without a video ID.");
+      }
+
+      setYoutubeResult({
+        privacyStatus: result.privacyStatus,
+        videoId: result.videoId,
+        watchUrl: result.watchUrl,
+      });
+    } catch (error) {
+      setYoutubeError(
+        error instanceof Error ? error.message : "YouTube upload failed.",
+      );
+    } finally {
+      setIsUploadingYoutube(false);
     }
   }
 
@@ -790,6 +868,83 @@ export default function EditorPage() {
                 controls
                 src={renderResult.videoUrl}
               />
+
+              <div className="mt-4 border-t border-emerald-200 pt-4">
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="min-w-44 flex-1 text-sm font-semibold text-emerald-950">
+                    YouTube privacy
+                    <select
+                      value={youtubePrivacy}
+                      onChange={(event) =>
+                        setYoutubePrivacy(
+                          event.target.value as "private" | "public" | "unlisted",
+                        )
+                      }
+                      className="mt-2 h-10 w-full border border-emerald-300 bg-white px-3 font-normal text-slate-950 outline-none focus:border-emerald-700"
+                    >
+                      <option value="private">Private</option>
+                      <option value="unlisted">Unlisted</option>
+                      <option value="public">Public</option>
+                    </select>
+                  </label>
+
+                  <button
+                    type="button"
+                    disabled={isUploadingYoutube}
+                    onClick={uploadToYoutube}
+                    className="flex h-10 items-center gap-2 bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-wait disabled:bg-slate-400"
+                  >
+                    {isUploadingYoutube ? (
+                      <LoaderCircle className="animate-spin" size={17} />
+                    ) : (
+                      <Upload size={17} />
+                    )}
+                    {isUploadingYoutube ? "Uploading..." : "Upload to YouTube"}
+                  </button>
+                </div>
+
+                <p className="mt-3 text-xs leading-5 text-emerald-800">
+                  Uses generated title, description, and hashtags from the
+                  script metadata.
+                </p>
+
+                {youtubeError ? (
+                  <p className="mt-3 border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                    {youtubeError}
+                  </p>
+                ) : null}
+
+                {youtubeAuthUrl ? (
+                  <a
+                    href={youtubeAuthUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 inline-flex h-9 items-center gap-2 bg-red-600 px-3 text-sm font-semibold text-white"
+                  >
+                    <Upload size={16} /> Connect YouTube
+                  </a>
+                ) : null}
+
+                {youtubeResult ? (
+                  <div className="mt-3 border border-emerald-300 bg-white px-3 py-2 text-sm text-emerald-900">
+                    <p className="font-semibold">
+                      Uploaded to YouTube
+                      {youtubeResult.privacyStatus
+                        ? ` as ${youtubeResult.privacyStatus}`
+                        : ""}
+                      .
+                    </p>
+                    <a
+                      href={youtubeResult.watchUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 inline-block font-semibold text-cyan-700 underline"
+                    >
+                      Open video
+                    </a>
+                  </div>
+                ) : null}
+              </div>
             </section>
           ) : null}
         </div>
