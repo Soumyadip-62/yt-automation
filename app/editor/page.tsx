@@ -48,6 +48,19 @@ type RenderResult = {
   videoUrl: string;
 };
 
+type RenderStartResult = {
+  cmdId: string;
+  renderId: string;
+  sandboxId: string;
+};
+
+type RenderProgressResult = {
+  error?: string;
+  overallProgress?: number;
+  stage: string;
+  videoUrl?: string;
+};
+
 type YoutubeUploadResult = {
   privacyStatus?: string;
   videoId: string;
@@ -68,12 +81,17 @@ const motionOptions: Array<{ label: string; value: SceneMotion }> = [
   { label: "Pan left", value: "pan-left" },
 ];
 
+function wait(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 export default function EditorPage() {
   const { renderPlan, setRenderPlan } = useRenderPlan();
   const [draft, setDraft] = useState<RenderPlan | null>(renderPlan);
   const [activeScene, setActiveScene] = useState(0);
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState("");
+  const [renderStatus, setRenderStatus] = useState("");
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
   const [voice, setVoice] = useState<VoiceName>("Charon");
   const [voiceStyle, setVoiceStyle] = useState<VoiceStyle>("Documentary");
@@ -290,6 +308,7 @@ export default function EditorPage() {
   async function renderVideo() {
     setIsRendering(true);
     setRenderError("");
+    setRenderStatus("Starting render...");
     setRenderResult(null);
     setYoutubeResult(null);
 
@@ -299,20 +318,59 @@ export default function EditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       });
-      const result = await readApiResponse<RenderResult>(response);
+      const result = await readApiResponse<RenderStartResult>(response);
 
       if (!response.ok) {
         throw new Error(result.error || "Video render failed.");
       }
 
-      setRenderResult(result);
-      downloadVideo(result.videoUrl);
+      for (let attempt = 0; attempt < 180; attempt += 1) {
+        await wait(3000);
+
+        const progressResponse = await fetch("/api/render/progress", {
+          body: JSON.stringify(result),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        });
+        const progress = await readApiResponse<RenderProgressResult>(
+          progressResponse,
+        );
+
+        if (!progressResponse.ok) {
+          throw new Error(progress.error || "Video render failed.");
+        }
+
+        if (progress.stage === "done" && progress.videoUrl) {
+          const finishedRender = {
+            renderId: result.renderId,
+            videoUrl: progress.videoUrl,
+          };
+
+          setRenderStatus("");
+          setRenderResult(finishedRender);
+          downloadVideo(finishedRender.videoUrl);
+          return;
+        }
+
+        if (progress.stage === "expired") {
+          throw new Error("Vercel Sandbox expired before render finished.");
+        }
+
+        setRenderStatus(
+          progress.overallProgress
+            ? `Rendering... ${Math.round(progress.overallProgress * 100)}%`
+            : `Rendering... ${progress.stage}`,
+        );
+      }
+
+      throw new Error("Render timed out before video was ready.");
     } catch (error) {
       setRenderError(
         error instanceof Error ? error.message : "Video render failed.",
       );
     } finally {
       setIsRendering(false);
+      setRenderStatus("");
     }
   }
 
@@ -841,6 +899,12 @@ export default function EditorPage() {
           {renderError ? (
             <p className="border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
               {renderError}
+            </p>
+          ) : null}
+
+          {renderStatus ? (
+            <p className="border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-800">
+              {renderStatus}
             </p>
           ) : null}
 

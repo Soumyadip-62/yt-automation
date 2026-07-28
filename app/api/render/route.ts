@@ -5,7 +5,6 @@ import {
   addBundleToSandbox,
   createSandbox,
   renderMediaOnVercel,
-  uploadToVercelBlob,
 } from "@remotion/vercel";
 import { NextResponse } from "next/server";
 import { COMPOSITION_ID } from "@/remotion/constants";
@@ -161,34 +160,29 @@ export async function POST(request: Request) {
       timeoutInMilliseconds: 5 * 60 * 1000,
     });
 
-    try {
-      await addBundleToSandbox({ bundleDir, sandbox });
+    await addBundleToSandbox({ bundleDir, sandbox });
 
-      const { contentType, sandboxFilePath } = await renderMediaOnVercel({
-        codec: "h264",
-        compositionId: COMPOSITION_ID,
-        inputProps: plan,
-        outputFile: `/tmp/${renderId}.mp4`,
-        sandbox,
-        timeoutInMilliseconds: 4 * 60 * 1000,
-      });
-
-      const blob = await uploadToVercelBlob({
+    const { cmdId, sandboxId } = await renderMediaOnVercel({
+      codec: "h264",
+      compositionId: COMPOSITION_ID,
+      detached: true,
+      detachedSandboxTimeoutInMilliseconds: 10 * 60 * 1000,
+      inputProps: plan,
+      outputFile: `/tmp/${renderId}.mp4`,
+      sandbox,
+      timeoutInMilliseconds: 4 * 60 * 1000,
+      vercelBlob: {
         access: "public",
         blobPath: `renders/${renderId}.mp4`,
         blobToken,
-        contentType,
-        sandbox,
-        sandboxFilePath,
-      });
+      },
+    });
 
-      return NextResponse.json({
-        renderId,
-        videoUrl: blob.url,
-      });
-    } finally {
-      await sandbox.stop().catch(() => undefined);
-    }
+    return NextResponse.json({
+      cmdId,
+      renderId,
+      sandboxId,
+    });
   } catch (error) {
     console.error("Video render failed:", error);
     return NextResponse.json(

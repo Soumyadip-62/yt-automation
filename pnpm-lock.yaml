@@ -23,6 +23,12 @@ importers:
       '@remotion/vercel':
         specifier: 4.0.498
         version: 4.0.498(@vercel/sandbox@2.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@rspack/binding':
+        specifier: 1.7.11
+        version: 1.7.11
+      '@rspack/core':
+        specifier: 1.7.11
+        version: 1.7.11(@swc/helpers@0.5.15)
       '@tanstack/react-query':
         specifier: ^5.101.2
         version: 5.101.2(react@19.2.4)
