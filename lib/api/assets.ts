@@ -1,4 +1,5 @@
 import type { SceneAsset } from "@/lib/gemini";
+import { readApiResponse } from "@/lib/api/read-api-response";
 import type { SceneAssetsFromNasa } from "@/lib/nasa";
 import type { VideoAssets } from "@/types/generatedAssets";
 
@@ -19,7 +20,9 @@ export async function getAssetsRequest(assetList: VideoAssets) {
     body: JSON.stringify(assetList),
   });
 
-  const data = (await response.json()) as AssetsResponse | AssetsErrorResponse;
+  const data = await readApiResponse<AssetsResponse | AssetsErrorResponse>(
+    response,
+  );
 
   if (!response.ok) {
     throw new Error(

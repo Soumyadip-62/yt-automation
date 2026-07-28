@@ -41,6 +41,7 @@ import {
   type VoiceName,
   type VoiceStyle,
 } from "@/lib/voice-config";
+import { readApiResponse } from "@/lib/api/read-api-response";
 
 type RenderResult = {
   renderId: string;
@@ -225,7 +226,7 @@ export default function EditorPage() {
           voice,
         }),
       });
-      const result = (await response.json()) as VoiceResult & { error?: string };
+      const result = await readApiResponse<VoiceResult>(response);
 
       if (!response.ok) {
         throw new Error(result.error || "Voice generation failed.");
@@ -298,7 +299,7 @@ export default function EditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       });
-      const result = (await response.json()) as RenderResult & { error?: string };
+      const result = await readApiResponse<RenderResult>(response);
 
       if (!response.ok) {
         throw new Error(result.error || "Video render failed.");
@@ -335,10 +336,9 @@ export default function EditorPage() {
         headers: { "Content-Type": "application/json" },
         method: "POST",
       });
-      const result = (await response.json()) as Partial<YoutubeUploadResult> & {
+      const result = await readApiResponse<Partial<YoutubeUploadResult> & {
         authUrl?: string;
-        error?: string;
-      };
+      }>(response);
 
       if (!response.ok) {
         if (result.authUrl) setYoutubeAuthUrl(result.authUrl);
