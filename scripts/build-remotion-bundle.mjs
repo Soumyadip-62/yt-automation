@@ -26,11 +26,6 @@ const bundleDir = await bundle({
           "@mediabunny/mp3-encoder": false,
         },
       },
-      output: {
-        ...currentConfig.output,
-        chunkFilename: "[name].[contenthash:8].js",
-        filename: "[name].[contenthash:8].js",
-      },
       optimization: {
         ...currentConfig.optimization,
         minimize: true,
@@ -48,13 +43,6 @@ const bundleDir = await bundle({
             },
           }),
         ],
-        splitChunks: {
-          chunks: "all",
-          maxAsyncSize: 250_000,
-          maxInitialSize: 250_000,
-          maxSize: 250_000,
-          minSize: 1_000,
-        },
       },
     };
   },
@@ -71,4 +59,3 @@ const bundleDir = await bundle({
 });
 
 console.log(`Remotion bundle built at ${bundleDir}`);
-
