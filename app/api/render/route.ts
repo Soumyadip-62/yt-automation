@@ -2,10 +2,8 @@ import { readdir, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { put } from "@vercel/blob";
-import {
-  createSandbox,
-  renderMediaOnVercel,
-} from "@remotion/vercel";
+import { Sandbox } from "@vercel/sandbox";
+import { renderMediaOnVercel } from "@remotion/vercel";
 import { NextResponse } from "next/server";
 import { COMPOSITION_ID } from "@/remotion/constants";
 import type { RenderPlan } from "@/types/render-plan";
@@ -15,6 +13,8 @@ export const maxDuration = 300;
 
 const REMOTION_BUNDLE_DIR = path.join(process.cwd(), ".remotion-bundle");
 const REMOTION_SANDBOX_BUNDLE_DIR = "remotion-bundle";
+const RENDER_SANDBOX_NAME =
+  process.env.VERCEL_RENDER_SANDBOX_NAME || "yt-automate-renderer";
 
 const toPosixPath = (filePath: string) => filePath.split(/[/\\]/).join("/");
 
@@ -30,6 +30,23 @@ const getAncestorDirectories = (relativePath: string) => {
 
 const toSandboxBundlePath = (relativePath: string) =>
   `${REMOTION_SANDBOX_BUNDLE_DIR}/${toPosixPath(relativePath)}`;
+
+type SandboxWithInternalSession = {
+  sandboxId?: string;
+  session?: {
+    sessionId?: string;
+  };
+};
+
+type DetachedRenderStart = {
+  cmdId?: string;
+  commandId?: string;
+  sandboxId?: string;
+};
+
+function getSandboxId(sandbox: SandboxWithInternalSession) {
+  return sandbox.sandboxId ?? sandbox.session?.sessionId;
+}
 
 async function getRemotionBundleFiles(bundleDir: string) {
   const fullBundleDir = path.resolve(bundleDir);
@@ -299,9 +316,12 @@ export async function POST(request: Request) {
     };
 
     const renderId = randomUUID();
-    const sandbox = await createSandbox({
+    const sandbox = await Sandbox.getOrCreate({
+      name: RENDER_SANDBOX_NAME,
+      persistent: true,
       resources: { vcpus: 4 },
-      timeoutInMilliseconds: 5 * 60 * 1000,
+      tags: { app: "yt-automate", role: "renderer" },
+      timeout: 10 * 60 * 1000,
     });
 
     await addBundleToSandboxBatched({ bundleDir: REMOTION_BUNDLE_DIR, sandbox });
@@ -321,11 +341,14 @@ export async function POST(request: Request) {
         blobToken,
       },
     });
-    const cmdId = render.cmdId;
-    const sandboxId = render.sandboxId;
+    const detachedRender = render as DetachedRenderStart;
+    const cmdId = detachedRender.cmdId ?? detachedRender.commandId;
+    const sandboxId =
+      detachedRender.sandboxId ??
+      getSandboxId(sandbox as unknown as SandboxWithInternalSession);
 
     if (!cmdId || !sandboxId) {
-      throw new Error("Vercel Sandbox render did not return command id.");
+      throw new Error("Vercel Sandbox render did not return progress ids.");
     }
 
     return NextResponse.json({
