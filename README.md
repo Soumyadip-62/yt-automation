@@ -33,6 +33,7 @@ Worker env:
 BLOB_READ_WRITE_TOKEN=...
 BLOB_ACCESS=private
 RENDER_WORKER_SECRET=use-a-long-random-secret
+REMOTION_RENDER_CONCURRENCY=1
 ```
 
 Vercel app env:

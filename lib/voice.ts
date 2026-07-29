@@ -171,11 +171,11 @@ export async function generateVoiceover({
   const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
   let audioUrl = `data:audio/wav;base64,${wav.toString("base64")}`;
 
-  if (blobToken && process.env.BLOB_ACCESS === "public") {
+  if (blobToken) {
     try {
       const filename = `voiceovers/narration-${randomUUID()}.wav`;
       const blob = await put(filename, wav, {
-        access: "public",
+        access: process.env.BLOB_ACCESS === "public" ? "public" : "private",
         contentType: "audio/wav",
         token: blobToken,
       });
