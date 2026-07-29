@@ -1,143 +1,26 @@
-import { readdir, readFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
-import path from "node:path";
-import { put } from "@vercel/blob";
-import { Sandbox } from "@vercel/sandbox";
-import { renderMediaOnVercel } from "@remotion/vercel";
 import { NextResponse } from "next/server";
-import { COMPOSITION_ID } from "@/remotion/constants";
 import type { RenderPlan } from "@/types/render-plan";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
-const REMOTION_BUNDLE_DIR = path.join(process.cwd(), ".remotion-bundle");
-const REMOTION_SANDBOX_BUNDLE_DIR = "remotion-bundle";
-const RENDER_SANDBOX_NAME =
-  process.env.VERCEL_RENDER_SANDBOX_NAME || "yt-automate-renderer";
+const RENDER_WORKER_URL = process.env.RENDER_WORKER_URL?.replace(/\/$/, "");
 
-const toPosixPath = (filePath: string) => filePath.split(/[/\\]/).join("/");
-
-const getAncestorDirectories = (relativePath: string) => {
-  const normalized = toPosixPath(relativePath);
-  const parts = normalized.split("/").filter(Boolean);
-  const dirs: string[] = [];
-  for (let i = 0; i < parts.length - 1; i++) {
-    dirs.push(parts.slice(0, i + 1).join("/"));
-  }
-  return dirs;
+type WorkerErrorResponse = {
+  error?: string;
 };
 
-const toSandboxBundlePath = (relativePath: string) =>
-  `${REMOTION_SANDBOX_BUNDLE_DIR}/${toPosixPath(relativePath)}`;
-
-type SandboxWithInternalSession = {
-  sandboxId?: string;
-  session?: {
-    sessionId?: string;
+function getWorkerHeaders() {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
   };
-};
 
-type DetachedRenderStart = {
-  cmdId?: string;
-  commandId?: string;
-  sandboxId?: string;
-};
+  if (process.env.RENDER_WORKER_SECRET) {
+    headers["x-render-worker-secret"] = process.env.RENDER_WORKER_SECRET;
+  }
 
-function getSandboxId(sandbox: SandboxWithInternalSession) {
-  return sandbox.sandboxId ?? sandbox.session?.sessionId;
+  return headers;
 }
-
-async function getRemotionBundleFiles(bundleDir: string) {
-  const fullBundleDir = path.resolve(bundleDir);
-  const files: { path: string; content: Buffer }[] = [];
-
-  async function readDirRecursive(dir: string, basePath = "") {
-    const entries = await readdir(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      const relativePath = path.join(basePath, entry.name);
-      if (entry.isDirectory()) {
-        await readDirRecursive(fullPath, relativePath);
-      } else {
-        const content = await readFile(fullPath);
-        files.push({ path: toPosixPath(relativePath), content });
-      }
-    }
-  }
-
-  await readDirRecursive(fullBundleDir);
-  return files;
-}
-
-const collectBundleDirectories = (bundleFiles: { path: string }[]) => {
-  const dirs = new Set<string>();
-  for (const file of bundleFiles) {
-    for (const dir of getAncestorDirectories(file.path)) {
-      dirs.add(dir);
-    }
-  }
-  return Array.from(dirs).sort();
-};
-
-async function addBundleToSandboxBatched({
-  sandbox,
-  bundleDir,
-  maxBatchSizeBytes = 400_000,
-}: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sandbox: any;
-  bundleDir: string;
-  maxBatchSizeBytes?: number;
-}) {
-  const bundleFiles = await getRemotionBundleFiles(bundleDir);
-  const directories = collectBundleDirectories(bundleFiles);
-
-  await sandbox.mkDir(REMOTION_SANDBOX_BUNDLE_DIR);
-
-  for (const dir of directories) {
-    const sandboxPath = toSandboxBundlePath(dir);
-    try {
-      await sandbox.mkDir(sandboxPath);
-    } catch {
-      // Directory may already exist
-    }
-  }
-
-  let currentBatch: { path: string; content: Buffer }[] = [];
-  let currentBatchBytes = 0;
-
-  for (const file of bundleFiles) {
-    const fileBytes = file.content.byteLength;
-
-    if (
-      currentBatch.length > 0 &&
-      currentBatchBytes + fileBytes > maxBatchSizeBytes
-    ) {
-      await sandbox.writeFiles(
-        currentBatch.map((f) => ({
-          path: toSandboxBundlePath(f.path),
-          content: f.content,
-        })),
-      );
-      currentBatch = [];
-      currentBatchBytes = 0;
-    }
-
-    currentBatch.push(file);
-    currentBatchBytes += fileBytes;
-  }
-
-  if (currentBatch.length > 0) {
-    await sandbox.writeFiles(
-      currentBatch.map((f) => ({
-        path: toSandboxBundlePath(f.path),
-        content: f.content,
-      })),
-    );
-  }
-}
-
 
 function isRemoteHttpsUrl(value: unknown): boolean {
   if (typeof value !== "string") return false;
@@ -153,8 +36,7 @@ function isRemoteHttpsUrl(value: unknown): boolean {
 function isAudioSource(value: string) {
   return (
     isRemoteHttpsUrl(value) ||
-    (value.length <= 30_000_000 &&
-      /^data:audio\/[a-zA-Z0-9.+-]+;base64,[a-zA-Z0-9+/=]+$/.test(value))
+    /^data:audio\/[a-zA-Z0-9.+-]+;base64,[a-zA-Z0-9+/=]+$/.test(value)
   );
 }
 
@@ -240,43 +122,15 @@ function validateRenderPlan(value: unknown): value is RenderPlan {
   });
 }
 
-async function ensureBlobAudioUrl(
-  url: string,
-  blobToken: string,
-  filenamePrefix: string,
-): Promise<string> {
-  if (!url || !url.startsWith("data:")) {
-    return url;
-  }
-
-  try {
-    const matches = url.match(/^data:([^;]+);base64,(.+)$/);
-    if (!matches) return url;
-
-    const contentType = matches[1] || "audio/wav";
-    const base64Data = matches[2];
-    const buffer = Buffer.from(base64Data, "base64");
-    const extension = contentType.split("/")[1] || "wav";
-    const filename = `renders/inputs/${filenamePrefix}-${randomUUID()}.${extension}`;
-
-    const blob = await put(filename, buffer, {
-      access: "public",
-      contentType,
-      token: blobToken,
-    });
-
-    return blob.url;
-  } catch (error) {
-    console.error(
-      `Failed to upload ${filenamePrefix} data URL to Vercel Blob:`,
-      error,
-    );
-    return url;
-  }
-}
-
 export async function POST(request: Request) {
   try {
+    if (!RENDER_WORKER_URL) {
+      return NextResponse.json(
+        { error: "Set RENDER_WORKER_URL to use the render worker." },
+        { status: 500 },
+      );
+    }
+
     const plan = (await request.json()) as unknown;
 
     if (!validateRenderPlan(plan)) {
@@ -289,73 +143,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-
-    if (!blobToken) {
-      return NextResponse.json(
-        { error: "Set BLOB_READ_WRITE_TOKEN to store rendered videos." },
-        { status: 500 },
-      );
-    }
-
-    const sanitizedAudioUrl = await ensureBlobAudioUrl(
-      plan.audioUrl,
-      blobToken,
-      "audio",
-    );
-    const sanitizedMusicUrl = await ensureBlobAudioUrl(
-      plan.musicUrl,
-      blobToken,
-      "music",
-    );
-
-    const sanitizedPlan: RenderPlan = {
-      ...plan,
-      audioUrl: sanitizedAudioUrl,
-      musicUrl: sanitizedMusicUrl,
-    };
-
-    const renderId = randomUUID();
-    const sandbox = await Sandbox.getOrCreate({
-      name: RENDER_SANDBOX_NAME,
-      persistent: true,
-      resources: { vcpus: 4 },
-      tags: { app: "yt-automate", role: "renderer" },
-      timeout: 10 * 60 * 1000,
+    const response = await fetch(`${RENDER_WORKER_URL}/render`, {
+      body: JSON.stringify(plan),
+      headers: getWorkerHeaders(),
+      method: "POST",
     });
+    const payload = (await response.json().catch(() => ({
+      error: "Render worker returned an invalid response.",
+    }))) as WorkerErrorResponse;
 
-    await addBundleToSandboxBatched({ bundleDir: REMOTION_BUNDLE_DIR, sandbox });
-
-    const render = await renderMediaOnVercel({
-      codec: "h264",
-      compositionId: COMPOSITION_ID,
-      detached: true,
-      detachedSandboxTimeoutInMilliseconds: 10 * 60 * 1000,
-      inputProps: sanitizedPlan,
-      outputFile: `/tmp/${renderId}.mp4`,
-      sandbox,
-      timeoutInMilliseconds: 4 * 60 * 1000,
-      vercelBlob: {
-        access: "public",
-        blobPath: `renders/${renderId}.mp4`,
-        blobToken,
-      },
-    });
-    const detachedRender = render as DetachedRenderStart;
-    const cmdId = detachedRender.cmdId ?? detachedRender.commandId;
-    const sandboxId =
-      detachedRender.sandboxId ??
-      getSandboxId(sandbox as unknown as SandboxWithInternalSession);
-
-    if (!cmdId || !sandboxId) {
-      throw new Error("Vercel Sandbox render did not return progress ids.");
-    }
-
-    return NextResponse.json({
-      cmdId,
-      renderId,
-      sandboxId,
-    });
+    return NextResponse.json(payload, { status: response.status });
   } catch (error) {
     console.error("Video render failed:", error);
     return NextResponse.json(

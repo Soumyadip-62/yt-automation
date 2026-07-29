@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Space Shorts Studio
 
 ## Getting Started
 
-First, run the development server:
+Run the Next.js app:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Render Worker
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Remotion rendering should run outside Vercel serverless. Deploy the worker on
+Railway or Render and let the Vercel app proxy render requests to it.
 
-## Learn More
+Worker build command:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+pnpm install && pnpm worker:build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Worker start command:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+pnpm worker:start
+```
 
-## Deploy on Vercel
+Worker env:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+BLOB_READ_WRITE_TOKEN=...
+BLOB_ACCESS=private
+RENDER_WORKER_SECRET=use-a-long-random-secret
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Vercel app env:
+
+```bash
+BLOB_READ_WRITE_TOKEN=...
+BLOB_ACCESS=private
+RENDER_WORKER_URL=https://your-worker.up.railway.app
+RENDER_WORKER_SECRET=same-secret-as-worker
+```
+
+With `RENDER_WORKER_URL` set, `/api/render` and `/api/render/progress` proxy to
+the worker. Without it, rendering returns a setup error instead of using Vercel
+Sandbox.

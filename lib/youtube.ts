@@ -172,12 +172,22 @@ export function buildYoutubeDescription(metadata: VideoMetadata) {
   return `${metadata.description.trim()}\n\n${hashtags}`.trim();
 }
 
-async function getVideoUploadBody(videoUrl: string) {
-  if (!videoUrl.startsWith("https://")) {
-    throw new Error("Upload a rendered Vercel Blob video URL.");
+async function getVideoUploadBody(videoUrl: string, origin: string) {
+  const url = videoUrl.startsWith("/")
+    ? new URL(videoUrl, origin).toString()
+    : videoUrl;
+
+  const parsedUrl = new URL(url);
+
+  if (
+    parsedUrl.protocol !== "https:" &&
+    parsedUrl.hostname !== "localhost" &&
+    parsedUrl.hostname !== "127.0.0.1"
+  ) {
+    throw new Error("Upload a rendered video URL.");
   }
 
-  const response = await fetch(videoUrl);
+  const response = await fetch(url);
 
   if (!response.ok) {
     throw new Error("Could not fetch rendered video for YouTube upload.");
@@ -222,7 +232,7 @@ export async function uploadVideoToYoutube({
   tokens: YoutubeTokens;
 }): Promise<YoutubeUploadResult> {
   const accessToken = await getAccessToken({ origin, tokens });
-  const video = await getVideoUploadBody(input.videoUrl);
+  const video = await getVideoUploadBody(input.videoUrl, origin);
   const metadata = {
     snippet: {
       categoryId: "28",

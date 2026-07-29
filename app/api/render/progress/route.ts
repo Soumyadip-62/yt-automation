@@ -1,8 +1,9 @@
-import { getRenderProgress } from "@remotion/vercel";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+const RENDER_WORKER_URL = process.env.RENDER_WORKER_URL?.replace(/\/$/, "");
 
 type ProgressRequest = {
   cmdId?: unknown;
@@ -11,8 +12,58 @@ type ProgressRequest = {
   sandboxId?: unknown;
 };
 
+type RenderProgress = {
+  contentType?: string;
+  error?: string;
+  message?: string;
+  overallProgress?: number;
+  renderId?: string;
+  stage: string;
+  url?: string;
+  videoUrl?: string;
+};
+
+function getWorkerHeaders() {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (process.env.RENDER_WORKER_SECRET) {
+    headers["x-render-worker-secret"] = process.env.RENDER_WORKER_SECRET;
+  }
+
+  return headers;
+}
+
+function withDownloadProxy(progress: RenderProgress, renderId: string) {
+  if (progress.stage !== "done") {
+    return progress;
+  }
+
+  const videoUrl = progress.videoUrl ?? progress.url;
+  if (!videoUrl) {
+    return progress;
+  }
+
+  return {
+    ...progress,
+    renderId,
+    videoUrl:
+      process.env.BLOB_ACCESS === "public"
+        ? videoUrl
+        : `/api/render/download?url=${encodeURIComponent(videoUrl)}`,
+  };
+}
+
 export async function POST(request: Request) {
   try {
+    if (!RENDER_WORKER_URL) {
+      return NextResponse.json(
+        { error: "Set RENDER_WORKER_URL to use the render worker." },
+        { status: 500 },
+      );
+    }
+
     const body = (await request.json()) as ProgressRequest;
     const cmdId =
       typeof body.cmdId === "string"
@@ -21,38 +72,30 @@ export async function POST(request: Request) {
           ? body.commandId
           : "";
 
-    if (
-      typeof body.sandboxId !== "string" ||
-      !cmdId ||
-      typeof body.renderId !== "string"
-    ) {
+    if (!cmdId || typeof body.renderId !== "string") {
       return NextResponse.json(
-        { error: "Provide render id, sandbox id, and command id." },
+        { error: "Provide render id and command id." },
         { status: 400 },
       );
     }
 
-    const progress = await getRenderProgress({
-      cmdId,
-      sandboxId: body.sandboxId,
+    const response = await fetch(`${RENDER_WORKER_URL}/render/progress`, {
+      body: JSON.stringify(body),
+      headers: getWorkerHeaders(),
+      method: "POST",
     });
+    const payload = (await response.json().catch(() => ({
+      error: "Render worker returned an invalid response.",
+      stage: "error",
+    }))) as RenderProgress;
 
-    if (progress.stage === "done") {
-      return NextResponse.json({
-        renderId: body.renderId,
-        stage: progress.stage,
-        videoUrl: progress.url,
+    if (response.ok) {
+      return NextResponse.json(withDownloadProxy(payload, body.renderId), {
+        status: response.status,
       });
     }
 
-    if (progress.stage === "error") {
-      return NextResponse.json(
-        { error: progress.message, stage: progress.stage },
-        { status: 500 },
-      );
-    }
-
-    return NextResponse.json(progress);
+    return NextResponse.json(payload, { status: response.status });
   } catch (error) {
     return NextResponse.json(
       {

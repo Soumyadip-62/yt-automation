@@ -83,19 +83,19 @@ function getCaptionFontSize(text: string) {
   const longestWord = cleanText
     .split(/\s+/)
     .reduce((longest, word) => Math.max(longest, word.length), 0);
-  const availableWidth = VIDEO_WIDTH - 144;
+  const availableWidth = VIDEO_WIDTH - 96;
 
-  for (let size = 68; size >= 38; size -= 2) {
+  for (let size = 66; size >= 30; size -= 2) {
     const estimatedCharsPerLine = Math.floor(availableWidth / (size * 0.58));
     const estimatedLines = Math.ceil(cleanText.length / estimatedCharsPerLine);
     const longestWordWidth = longestWord * size * 0.58;
 
-    if (estimatedLines <= 3 && longestWordWidth <= availableWidth) {
+    if (estimatedLines <= 3 && longestWordWidth <= availableWidth * 0.98) {
       return size;
     }
   }
 
-  return 38;
+  return 30;
 }
 
 function SceneView({
@@ -177,17 +177,17 @@ function SceneView({
             fontFamily: "Arial, sans-serif",
             fontSize: captionFontSize,
             fontWeight: 800,
-            left: 72,
+            left: 48,
             lineHeight: 1.08,
             maxHeight: 320,
             overflow: "hidden",
-            overflowWrap: "anywhere",
+            overflowWrap: "normal",
             position: "absolute",
-            right: 72,
+            right: 48,
             textAlign: "center",
             textShadow: "0 4px 18px rgba(0,0,0,0.85)",
             whiteSpace: "normal",
-            wordBreak: "normal",
+            wordBreak: "keep-all",
           }}
         >
           {visibleWords.length > 0

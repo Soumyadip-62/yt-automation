@@ -339,7 +339,7 @@ export default function EditorPage() {
       }
 
       if (!isRenderStartResult(result)) {
-        throw new Error("Render started without sandbox command ids.");
+        throw new Error("Render started without progress ids.");
       }
 
       for (let attempt = 0; attempt < 180; attempt += 1) {
@@ -371,7 +371,7 @@ export default function EditorPage() {
         }
 
         if (progress.stage === "expired") {
-          throw new Error("Vercel Sandbox expired before render finished.");
+          throw new Error("Render worker expired before render finished.");
         }
 
         setRenderStatus(
