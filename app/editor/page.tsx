@@ -74,6 +74,20 @@ type VoiceResult = {
   wordTimings: WordTiming[];
 };
 
+function isRenderStartResult(value: unknown): value is RenderStartResult {
+  if (!value || typeof value !== "object") return false;
+
+  const result = value as Partial<RenderStartResult>;
+  return (
+    typeof result.cmdId === "string" &&
+    result.cmdId.length > 0 &&
+    typeof result.renderId === "string" &&
+    result.renderId.length > 0 &&
+    typeof result.sandboxId === "string" &&
+    result.sandboxId.length > 0
+  );
+}
+
 const motionOptions: Array<{ label: string; value: SceneMotion }> = [
   { label: "None", value: "none" },
   { label: "Zoom in", value: "zoom-in" },
@@ -322,6 +336,10 @@ export default function EditorPage() {
 
       if (!response.ok) {
         throw new Error(result.error || "Video render failed.");
+      }
+
+      if (!isRenderStartResult(result)) {
+        throw new Error("Render started without sandbox command ids.");
       }
 
       for (let attempt = 0; attempt < 180; attempt += 1) {

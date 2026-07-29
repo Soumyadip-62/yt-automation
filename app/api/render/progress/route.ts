@@ -6,6 +6,7 @@ export const maxDuration = 60;
 
 type ProgressRequest = {
   cmdId?: unknown;
+  commandId?: unknown;
   renderId?: unknown;
   sandboxId?: unknown;
 };
@@ -13,10 +14,16 @@ type ProgressRequest = {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as ProgressRequest;
+    const cmdId =
+      typeof body.cmdId === "string"
+        ? body.cmdId
+        : typeof body.commandId === "string"
+          ? body.commandId
+          : "";
 
     if (
       typeof body.sandboxId !== "string" ||
-      typeof body.cmdId !== "string" ||
+      !cmdId ||
       typeof body.renderId !== "string"
     ) {
       return NextResponse.json(
@@ -26,7 +33,7 @@ export async function POST(request: Request) {
     }
 
     const progress = await getRenderProgress({
-      cmdId: body.cmdId,
+      cmdId,
       sandboxId: body.sandboxId,
     });
 

@@ -76,6 +76,8 @@ async function addBundleToSandboxBatched({
   const bundleFiles = await getRemotionBundleFiles(bundleDir);
   const directories = collectBundleDirectories(bundleFiles);
 
+  await sandbox.mkDir(REMOTION_SANDBOX_BUNDLE_DIR);
+
   for (const dir of directories) {
     const sandboxPath = toSandboxBundlePath(dir);
     try {
@@ -304,8 +306,7 @@ export async function POST(request: Request) {
 
     await addBundleToSandboxBatched({ bundleDir: REMOTION_BUNDLE_DIR, sandbox });
 
-
-    const { cmdId, sandboxId } = await renderMediaOnVercel({
+    const render = await renderMediaOnVercel({
       codec: "h264",
       compositionId: COMPOSITION_ID,
       detached: true,
@@ -320,6 +321,12 @@ export async function POST(request: Request) {
         blobToken,
       },
     });
+    const cmdId = render.cmdId;
+    const sandboxId = render.sandboxId;
+
+    if (!cmdId || !sandboxId) {
+      throw new Error("Vercel Sandbox render did not return command id.");
+    }
 
     return NextResponse.json({
       cmdId,
@@ -334,4 +341,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
