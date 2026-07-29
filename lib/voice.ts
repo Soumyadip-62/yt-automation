@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-import { put } from "@vercel/blob";
 import { GoogleGenAI } from "@google/genai";
 import type { VoiceName, VoiceStyle } from "@/lib/voice-config";
 import type { SceneTiming, WordTiming } from "@/types/render-plan";
@@ -168,25 +166,7 @@ export async function generateVoiceover({
   }
 
   const wav = pcmToWav(pcm);
-  const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-  let audioUrl = `data:audio/wav;base64,${wav.toString("base64")}`;
-
-  if (blobToken) {
-    try {
-      const filename = `voiceovers/narration-${randomUUID()}.wav`;
-      const blob = await put(filename, wav, {
-        access: process.env.BLOB_ACCESS === "public" ? "public" : "private",
-        contentType: "audio/wav",
-        token: blobToken,
-      });
-      audioUrl = blob.url;
-    } catch (error) {
-      console.warn(
-        "Failed to upload voiceover to Vercel Blob, using inline fallback:",
-        error,
-      );
-    }
-  }
+  const audioUrl = `data:audio/wav;base64,${wav.toString("base64")}`;
 
   return {
     audioUrl,

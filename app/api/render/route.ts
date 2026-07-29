@@ -1,41 +1,9 @@
 import { NextResponse } from "next/server";
+import { startLocalRender } from "@/lib/render/local-render-jobs";
 import type { RenderPlan } from "@/types/render-plan";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const RENDER_WORKER_URL = process.env.RENDER_WORKER_URL?.replace(/\/$/, "");
-
-type WorkerErrorResponse = {
-  error?: string;
-};
-
-async function readWorkerJson(response: Response): Promise<WorkerErrorResponse> {
-  const text = await response.text();
-
-  try {
-    return JSON.parse(text) as WorkerErrorResponse;
-  } catch {
-    return {
-      error: `Render worker returned non-JSON response (${response.status}): ${text.slice(
-        0,
-        300,
-      )}`,
-    };
-  }
-}
-
-function getWorkerHeaders() {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  if (process.env.RENDER_WORKER_SECRET) {
-    headers["x-render-worker-secret"] = process.env.RENDER_WORKER_SECRET;
-  }
-
-  return headers;
-}
 
 function isRemoteHttpsUrl(value: unknown): boolean {
   if (typeof value !== "string") return false;
@@ -139,13 +107,6 @@ function validateRenderPlan(value: unknown): value is RenderPlan {
 
 export async function POST(request: Request) {
   try {
-    if (!RENDER_WORKER_URL) {
-      return NextResponse.json(
-        { error: "Set RENDER_WORKER_URL to use the render worker." },
-        { status: 500 },
-      );
-    }
-
     const plan = (await request.json()) as unknown;
 
     if (!validateRenderPlan(plan)) {
@@ -158,14 +119,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const response = await fetch(`${RENDER_WORKER_URL}/render`, {
-      body: JSON.stringify(plan),
-      headers: getWorkerHeaders(),
-      method: "POST",
-    });
-    const payload = await readWorkerJson(response);
-
-    return NextResponse.json(payload, { status: response.status });
+    return NextResponse.json(startLocalRender(plan));
   } catch (error) {
     console.error("Video render failed:", error);
     return NextResponse.json(

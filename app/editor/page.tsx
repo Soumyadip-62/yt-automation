@@ -371,7 +371,7 @@ export default function EditorPage() {
         }
 
         if (progress.stage === "expired") {
-          throw new Error("Render worker expired before render finished.");
+          throw new Error("Local render expired before video was ready.");
         }
 
         setRenderStatus(

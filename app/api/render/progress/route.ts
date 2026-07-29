@@ -1,85 +1,17 @@
 import { NextResponse } from "next/server";
+import { getLocalRenderProgress } from "@/lib/render/local-render-jobs";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const RENDER_WORKER_URL = process.env.RENDER_WORKER_URL?.replace(/\/$/, "");
 
 type ProgressRequest = {
   cmdId?: unknown;
   commandId?: unknown;
   renderId?: unknown;
-  sandboxId?: unknown;
 };
-
-type RenderProgress = {
-  contentType?: string;
-  error?: string;
-  message?: string;
-  overallProgress?: number;
-  renderId?: string;
-  stage: string;
-  url?: string;
-  videoUrl?: string;
-};
-
-async function readWorkerJson(response: Response): Promise<RenderProgress> {
-  const text = await response.text();
-
-  try {
-    return JSON.parse(text) as RenderProgress;
-  } catch {
-    return {
-      error: `Render worker returned non-JSON response (${response.status}): ${text.slice(
-        0,
-        300,
-      )}`,
-      stage: "error",
-    };
-  }
-}
-
-function getWorkerHeaders() {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  if (process.env.RENDER_WORKER_SECRET) {
-    headers["x-render-worker-secret"] = process.env.RENDER_WORKER_SECRET;
-  }
-
-  return headers;
-}
-
-function withDownloadProxy(progress: RenderProgress, renderId: string) {
-  if (progress.stage !== "done") {
-    return progress;
-  }
-
-  const videoUrl = progress.videoUrl ?? progress.url;
-  if (!videoUrl) {
-    return progress;
-  }
-
-  return {
-    ...progress,
-    renderId,
-    videoUrl:
-      process.env.BLOB_ACCESS === "public"
-        ? videoUrl
-        : `/api/render/download?url=${encodeURIComponent(videoUrl)}`,
-  };
-}
 
 export async function POST(request: Request) {
   try {
-    if (!RENDER_WORKER_URL) {
-      return NextResponse.json(
-        { error: "Set RENDER_WORKER_URL to use the render worker." },
-        { status: 500 },
-      );
-    }
-
     const body = (await request.json()) as ProgressRequest;
     const cmdId =
       typeof body.cmdId === "string"
@@ -95,25 +27,24 @@ export async function POST(request: Request) {
       );
     }
 
-    const response = await fetch(`${RENDER_WORKER_URL}/render/progress`, {
-      body: JSON.stringify(body),
-      headers: getWorkerHeaders(),
-      method: "POST",
-    });
-    const payload = await readWorkerJson(response);
+    const progress = getLocalRenderProgress({ cmdId, renderId: body.renderId });
 
-    if (response.ok) {
-      return NextResponse.json(withDownloadProxy(payload, body.renderId), {
-        status: response.status,
-      });
+    if (!progress) {
+      return NextResponse.json(
+        { error: "Render progress not found.", stage: "error" },
+        { status: 404 },
+      );
     }
 
-    return NextResponse.json(payload, { status: response.status });
+    return NextResponse.json(progress, {
+      status: progress.stage === "error" ? 500 : 200,
+    });
   } catch (error) {
     return NextResponse.json(
       {
         error:
           error instanceof Error ? error.message : "Could not read render progress.",
+        stage: "error",
       },
       { status: 500 },
     );

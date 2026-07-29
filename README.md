@@ -1,50 +1,48 @@
 # AI Space Shorts Studio
 
-## Getting Started
+Local-first YouTube Shorts generator for space videos.
 
-Run the Next.js app:
+## Local Render Setup
+
+Build the Remotion bundle:
+
+```bash
+pnpm build:remotion
+```
+
+Start the app:
 
 ```bash
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open:
 
-## Render Worker
-
-Remotion rendering should run outside Vercel serverless. Deploy the worker on
-Railway or Render and let the Vercel app proxy render requests to it.
-
-Worker build command:
-
-```bash
-pnpm install && pnpm worker:build
+```txt
+http://localhost:3000
 ```
 
-Worker start command:
+Rendered videos are saved locally:
 
-```bash
-pnpm worker:start
+```txt
+public/renders/<renderId>.mp4
 ```
 
-Worker env:
+Browser download/playback uses:
 
-```bash
-BLOB_READ_WRITE_TOKEN=...
-BLOB_ACCESS=private
-RENDER_WORKER_SECRET=use-a-long-random-secret
-REMOTION_RENDER_CONCURRENCY=1
+```txt
+/renders/<renderId>.mp4
 ```
 
-Vercel app env:
+## Required Env
 
 ```bash
-BLOB_READ_WRITE_TOKEN=...
-BLOB_ACCESS=private
-RENDER_WORKER_URL=https://your-worker.up.railway.app
-RENDER_WORKER_SECRET=same-secret-as-worker
+GEMINI_API_KEY=...
+OPENAI_API_KEY=...
+NASA_ASSETS_API_URL=...
+PEXELS_API_KEY=...
+PEXLES_VIDEO_URL=...
 ```
 
-With `RENDER_WORKER_URL` set, `/api/render` and `/api/render/progress` proxy to
-the worker. Without it, rendering returns a setup error instead of using Vercel
-Sandbox.
+No Vercel Blob, Vercel Sandbox, Railway, or Render worker is required for local
+video rendering.
