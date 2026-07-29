@@ -23,6 +23,22 @@ type RenderProgress = {
   videoUrl?: string;
 };
 
+async function readWorkerJson(response: Response): Promise<RenderProgress> {
+  const text = await response.text();
+
+  try {
+    return JSON.parse(text) as RenderProgress;
+  } catch {
+    return {
+      error: `Render worker returned non-JSON response (${response.status}): ${text.slice(
+        0,
+        300,
+      )}`,
+      stage: "error",
+    };
+  }
+}
+
 function getWorkerHeaders() {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -84,10 +100,7 @@ export async function POST(request: Request) {
       headers: getWorkerHeaders(),
       method: "POST",
     });
-    const payload = (await response.json().catch(() => ({
-      error: "Render worker returned an invalid response.",
-      stage: "error",
-    }))) as RenderProgress;
+    const payload = await readWorkerJson(response);
 
     if (response.ok) {
       return NextResponse.json(withDownloadProxy(payload, body.renderId), {

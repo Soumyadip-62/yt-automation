@@ -10,6 +10,21 @@ type WorkerErrorResponse = {
   error?: string;
 };
 
+async function readWorkerJson(response: Response): Promise<WorkerErrorResponse> {
+  const text = await response.text();
+
+  try {
+    return JSON.parse(text) as WorkerErrorResponse;
+  } catch {
+    return {
+      error: `Render worker returned non-JSON response (${response.status}): ${text.slice(
+        0,
+        300,
+      )}`,
+    };
+  }
+}
+
 function getWorkerHeaders() {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -148,9 +163,7 @@ export async function POST(request: Request) {
       headers: getWorkerHeaders(),
       method: "POST",
     });
-    const payload = (await response.json().catch(() => ({
-      error: "Render worker returned an invalid response.",
-    }))) as WorkerErrorResponse;
+    const payload = await readWorkerJson(response);
 
     return NextResponse.json(payload, { status: response.status });
   } catch (error) {

@@ -2,8 +2,12 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import dotenv from "dotenv";
 import { put } from "@vercel/blob";
 import { renderMedia, selectComposition } from "@remotion/renderer";
+
+dotenv.config({ path: ".env.local" });
+dotenv.config();
 
 const PORT = Number(process.env.PORT || 4000);
 const COMPOSITION_ID = "SpaceShort";
