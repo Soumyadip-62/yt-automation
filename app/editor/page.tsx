@@ -41,30 +41,10 @@ import {
   type VoiceName,
   type VoiceStyle,
 } from "@/lib/voice-config";
-import { readApiResponse } from "@/lib/api/read-api-response";
 
 type RenderResult = {
   renderId: string;
   videoUrl: string;
-};
-
-type RenderStartResult = {
-  cmdId: string;
-  renderId: string;
-  sandboxId: string;
-};
-
-type RenderProgressResult = {
-  error?: string;
-  overallProgress?: number;
-  stage: string;
-  videoUrl?: string;
-};
-
-type YoutubeUploadResult = {
-  privacyStatus?: string;
-  videoId: string;
-  watchUrl: string;
 };
 
 type VoiceResult = {
@@ -74,20 +54,6 @@ type VoiceResult = {
   wordTimings: WordTiming[];
 };
 
-function isRenderStartResult(value: unknown): value is RenderStartResult {
-  if (!value || typeof value !== "object") return false;
-
-  const result = value as Partial<RenderStartResult>;
-  return (
-    typeof result.cmdId === "string" &&
-    result.cmdId.length > 0 &&
-    typeof result.renderId === "string" &&
-    result.renderId.length > 0 &&
-    typeof result.sandboxId === "string" &&
-    result.sandboxId.length > 0
-  );
-}
-
 const motionOptions: Array<{ label: string; value: SceneMotion }> = [
   { label: "None", value: "none" },
   { label: "Zoom in", value: "zoom-in" },
@@ -95,31 +61,17 @@ const motionOptions: Array<{ label: string; value: SceneMotion }> = [
   { label: "Pan left", value: "pan-left" },
 ];
 
-function wait(milliseconds: number) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
 export default function EditorPage() {
   const { renderPlan, setRenderPlan } = useRenderPlan();
   const [draft, setDraft] = useState<RenderPlan | null>(renderPlan);
   const [activeScene, setActiveScene] = useState(0);
   const [isRendering, setIsRendering] = useState(false);
   const [renderError, setRenderError] = useState("");
-  const [renderStatus, setRenderStatus] = useState("");
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
   const [voice, setVoice] = useState<VoiceName>("Charon");
   const [voiceStyle, setVoiceStyle] = useState<VoiceStyle>("Documentary");
   const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
   const [voiceError, setVoiceError] = useState("");
-  const [youtubePrivacy, setYoutubePrivacy] = useState<
-    "private" | "public" | "unlisted"
-  >("private");
-  const [isUploadingYoutube, setIsUploadingYoutube] = useState(false);
-  const [youtubeError, setYoutubeError] = useState("");
-  const [youtubeAuthUrl, setYoutubeAuthUrl] = useState("");
-  const [youtubeResult, setYoutubeResult] = useState<YoutubeUploadResult | null>(
-    null,
-  );
 
   useEffect(() => {
     if (draft) setRenderPlan(draft);
@@ -164,16 +116,6 @@ export default function EditorPage() {
     link.remove();
   }
 
-  function getYoutubeDescription(plan: RenderPlan) {
-    const hashtags = plan.metadata.hashtags.join(" ").trim();
-
-    if (!hashtags || plan.metadata.description.includes(hashtags)) {
-      return plan.metadata.description;
-    }
-
-    return `${plan.metadata.description.trim()}\n\n${hashtags}`.trim();
-  }
-
   function updateScene(patch: Partial<RenderScene>) {
     setDraft((current) => {
       if (!current) return current;
@@ -185,7 +127,6 @@ export default function EditorPage() {
       };
     });
     setRenderResult(null);
-    setYoutubeResult(null);
   }
 
   function updateAudio(
@@ -203,7 +144,6 @@ export default function EditorPage() {
   ) {
     setDraft((current) => (current ? { ...current, ...patch } : current));
     setRenderResult(null);
-    setYoutubeResult(null);
   }
 
   function updateMusic(
@@ -221,7 +161,6 @@ export default function EditorPage() {
   ) {
     setDraft((current) => (current ? { ...current, ...patch } : current));
     setRenderResult(null);
-    setYoutubeResult(null);
   }
 
   function selectMusicFile(file?: File) {
@@ -246,7 +185,6 @@ export default function EditorPage() {
     setIsGeneratingVoice(true);
     setVoiceError("");
     setRenderResult(null);
-    setYoutubeResult(null);
 
     try {
       const response = await fetch("/api/voice", {
@@ -258,7 +196,7 @@ export default function EditorPage() {
           voice,
         }),
       });
-      const result = await readApiResponse<VoiceResult>(response);
+      const result = (await response.json()) as VoiceResult & { error?: string };
 
       if (!response.ok) {
         throw new Error(result.error || "Voice generation failed.");
@@ -322,9 +260,7 @@ export default function EditorPage() {
   async function renderVideo() {
     setIsRendering(true);
     setRenderError("");
-    setRenderStatus("Starting render...");
     setRenderResult(null);
-    setYoutubeResult(null);
 
     try {
       const response = await fetch("/api/render", {
@@ -332,110 +268,20 @@ export default function EditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       });
-      const result = await readApiResponse<RenderStartResult>(response);
+      const result = (await response.json()) as RenderResult & { error?: string };
 
       if (!response.ok) {
         throw new Error(result.error || "Video render failed.");
       }
 
-      if (!isRenderStartResult(result)) {
-        throw new Error("Render started without progress ids.");
-      }
-
-      for (let attempt = 0; attempt < 180; attempt += 1) {
-        await wait(3000);
-
-        const progressResponse = await fetch("/api/render/progress", {
-          body: JSON.stringify(result),
-          headers: { "Content-Type": "application/json" },
-          method: "POST",
-        });
-        const progress = await readApiResponse<RenderProgressResult>(
-          progressResponse,
-        );
-
-        if (!progressResponse.ok) {
-          throw new Error(progress.error || "Video render failed.");
-        }
-
-        if (progress.stage === "done" && progress.videoUrl) {
-          const finishedRender = {
-            renderId: result.renderId,
-            videoUrl: progress.videoUrl,
-          };
-
-          setRenderStatus("");
-          setRenderResult(finishedRender);
-          downloadVideo(finishedRender.videoUrl);
-          return;
-        }
-
-        if (progress.stage === "expired") {
-          throw new Error("Local render expired before video was ready.");
-        }
-
-        setRenderStatus(
-          progress.overallProgress
-            ? `Rendering... ${Math.round(progress.overallProgress * 100)}%`
-            : `Rendering... ${progress.stage}`,
-        );
-      }
-
-      throw new Error("Render timed out before video was ready.");
+      setRenderResult(result);
+      downloadVideo(result.videoUrl);
     } catch (error) {
       setRenderError(
         error instanceof Error ? error.message : "Video render failed.",
       );
     } finally {
       setIsRendering(false);
-      setRenderStatus("");
-    }
-  }
-
-  async function uploadToYoutube() {
-    if (!renderResult || !draft) return;
-
-    setIsUploadingYoutube(true);
-    setYoutubeError("");
-    setYoutubeAuthUrl("");
-    setYoutubeResult(null);
-
-    try {
-      const response = await fetch("/api/youtube/upload", {
-        body: JSON.stringify({
-          description: getYoutubeDescription(draft),
-          privacyStatus: youtubePrivacy,
-          tags: draft.metadata.hashtags,
-          title: draft.metadata.title,
-          videoUrl: renderResult.videoUrl,
-        }),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
-      const result = await readApiResponse<Partial<YoutubeUploadResult> & {
-        authUrl?: string;
-      }>(response);
-
-      if (!response.ok) {
-        if (result.authUrl) setYoutubeAuthUrl(result.authUrl);
-        throw new Error(result.error || "YouTube upload failed.");
-      }
-
-      if (!result.videoId || !result.watchUrl) {
-        throw new Error("YouTube upload finished without a video ID.");
-      }
-
-      setYoutubeResult({
-        privacyStatus: result.privacyStatus,
-        videoId: result.videoId,
-        watchUrl: result.watchUrl,
-      });
-    } catch (error) {
-      setYoutubeError(
-        error instanceof Error ? error.message : "YouTube upload failed.",
-      );
-    } finally {
-      setIsUploadingYoutube(false);
     }
   }
 
@@ -920,12 +766,6 @@ export default function EditorPage() {
             </p>
           ) : null}
 
-          {renderStatus ? (
-            <p className="border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-800">
-              {renderStatus}
-            </p>
-          ) : null}
-
           {renderResult ? (
             <section className="border border-emerald-200 bg-emerald-50 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -950,83 +790,6 @@ export default function EditorPage() {
                 controls
                 src={renderResult.videoUrl}
               />
-
-              <div className="mt-4 border-t border-emerald-200 pt-4">
-                <div className="flex flex-wrap items-end gap-3">
-                  <label className="min-w-44 flex-1 text-sm font-semibold text-emerald-950">
-                    YouTube privacy
-                    <select
-                      value={youtubePrivacy}
-                      onChange={(event) =>
-                        setYoutubePrivacy(
-                          event.target.value as "private" | "public" | "unlisted",
-                        )
-                      }
-                      className="mt-2 h-10 w-full border border-emerald-300 bg-white px-3 font-normal text-slate-950 outline-none focus:border-emerald-700"
-                    >
-                      <option value="private">Private</option>
-                      <option value="unlisted">Unlisted</option>
-                      <option value="public">Public</option>
-                    </select>
-                  </label>
-
-                  <button
-                    type="button"
-                    disabled={isUploadingYoutube}
-                    onClick={uploadToYoutube}
-                    className="flex h-10 items-center gap-2 bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-emerald-800 disabled:cursor-wait disabled:bg-slate-400"
-                  >
-                    {isUploadingYoutube ? (
-                      <LoaderCircle className="animate-spin" size={17} />
-                    ) : (
-                      <Upload size={17} />
-                    )}
-                    {isUploadingYoutube ? "Uploading..." : "Upload to YouTube"}
-                  </button>
-                </div>
-
-                <p className="mt-3 text-xs leading-5 text-emerald-800">
-                  Uses generated title, description, and hashtags from the
-                  script metadata.
-                </p>
-
-                {youtubeError ? (
-                  <p className="mt-3 border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
-                    {youtubeError}
-                  </p>
-                ) : null}
-
-                {youtubeAuthUrl ? (
-                  <a
-                    href={youtubeAuthUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 inline-flex h-9 items-center gap-2 bg-red-600 px-3 text-sm font-semibold text-white"
-                  >
-                    <Upload size={16} /> Connect YouTube
-                  </a>
-                ) : null}
-
-                {youtubeResult ? (
-                  <div className="mt-3 border border-emerald-300 bg-white px-3 py-2 text-sm text-emerald-900">
-                    <p className="font-semibold">
-                      Uploaded to YouTube
-                      {youtubeResult.privacyStatus
-                        ? ` as ${youtubeResult.privacyStatus}`
-                        : ""}
-                      .
-                    </p>
-                    <a
-                      href={youtubeResult.watchUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-1 inline-block font-semibold text-cyan-700 underline"
-                    >
-                      Open video
-                    </a>
-                  </div>
-                ) : null}
-              </div>
             </section>
           ) : null}
         </div>

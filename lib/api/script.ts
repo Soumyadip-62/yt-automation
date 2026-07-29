@@ -1,5 +1,4 @@
 import type { ScriptResponse } from "@/lib/gemini";
-import { readApiResponse } from "@/lib/api/read-api-response";
 
 type ScriptErrorResponse = {
   error?: string;
@@ -14,9 +13,9 @@ export async function generateScriptRequest(topic: string) {
     body: JSON.stringify({ topic }),
   });
 
-  const data = await readApiResponse<ScriptResponse | ScriptErrorResponse>(
-    response,
-  );
+  const data = (await response.json()) as
+    | ScriptResponse
+    | ScriptErrorResponse;
 
   if (!response.ok) {
     throw new Error(

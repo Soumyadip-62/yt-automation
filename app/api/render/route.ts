@@ -1,9 +1,30 @@
+import { randomUUID } from "node:crypto";
+import path from "node:path";
+import { mkdir } from "node:fs/promises";
+import { bundle } from "@remotion/bundler";
+import { renderMedia, selectComposition } from "@remotion/renderer";
 import { NextResponse } from "next/server";
-import { startLocalRender } from "@/lib/render/local-render-jobs";
+import { COMPOSITION_ID } from "@/remotion/constants";
 import type { RenderPlan } from "@/types/render-plan";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
+
+let bundlePromise: Promise<string> | null = null;
+
+function getBundle() {
+  if (!bundlePromise) {
+    bundlePromise = bundle({
+      entryPoint: path.join(process.cwd(), "remotion/index.ts"),
+      publicDir: path.join(process.cwd(), "public"),
+    }).catch((error) => {
+      bundlePromise = null;
+      throw error;
+    });
+  }
+
+  return bundlePromise;
+}
 
 function isRemoteHttpsUrl(value: unknown): boolean {
   if (typeof value !== "string") return false;
@@ -19,7 +40,8 @@ function isRemoteHttpsUrl(value: unknown): boolean {
 function isAudioSource(value: string) {
   return (
     isRemoteHttpsUrl(value) ||
-    /^data:audio\/[a-zA-Z0-9.+-]+;base64,[a-zA-Z0-9+/=]+$/.test(value)
+    (value.length <= 30_000_000 &&
+      /^data:audio\/[a-zA-Z0-9.+-]+;base64,[a-zA-Z0-9+/=]+$/.test(value))
   );
 }
 
@@ -119,7 +141,29 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json(startLocalRender(plan));
+    const serveUrl = await getBundle();
+    const composition = await selectComposition({
+      id: COMPOSITION_ID,
+      inputProps: plan,
+      serveUrl,
+    });
+    const renderId = randomUUID();
+    const outputDirectory = path.join(process.cwd(), "public", "videos");
+    const outputLocation = path.join(outputDirectory, `${renderId}.mp4`);
+
+    await mkdir(outputDirectory, { recursive: true });
+    await renderMedia({
+      codec: "h264",
+      composition,
+      inputProps: plan,
+      outputLocation,
+      serveUrl,
+    });
+
+    return NextResponse.json({
+      renderId,
+      videoUrl: `/videos/${renderId}.mp4`,
+    });
   } catch (error) {
     console.error("Video render failed:", error);
     return NextResponse.json(

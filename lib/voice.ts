@@ -166,10 +166,9 @@ export async function generateVoiceover({
   }
 
   const wav = pcmToWav(pcm);
-  const audioUrl = `data:audio/wav;base64,${wav.toString("base64")}`;
 
   return {
-    audioUrl,
+    audioUrl: `data:audio/wav;base64,${wav.toString("base64")}`,
     durationSeconds,
     sceneTimings,
     wordTimings,
