@@ -24,6 +24,7 @@ import {
   VIDEO_WIDTH,
 } from "@/remotion/constants";
 import {
+  CLOSING_VIDEO_DURATION_SECONDS,
   getDurationInFrames,
   ShortsComposition,
 } from "@/remotion/shorts-composition";
@@ -37,8 +38,10 @@ import type {
 } from "@/types/render-plan";
 import {
   VOICE_OPTIONS,
+  VOICE_SPEEDS,
   VOICE_STYLES,
   type VoiceName,
+  type VoiceSpeed,
   type VoiceStyle,
 } from "@/lib/voice-config";
 
@@ -61,6 +64,12 @@ const motionOptions: Array<{ label: string; value: SceneMotion }> = [
   { label: "Pan left", value: "pan-left" },
 ];
 
+type PresetSound = {
+  filename: string;
+  name: string;
+  url: string;
+};
+
 export default function EditorPage() {
   const { renderPlan, setRenderPlan } = useRenderPlan();
   const [draft, setDraft] = useState<RenderPlan | null>(renderPlan);
@@ -70,12 +79,29 @@ export default function EditorPage() {
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
   const [voice, setVoice] = useState<VoiceName>("Charon");
   const [voiceStyle, setVoiceStyle] = useState<VoiceStyle>("Documentary");
+  const [voiceSpeed, setVoiceSpeed] = useState<VoiceSpeed>("normal");
   const [isGeneratingVoice, setIsGeneratingVoice] = useState(false);
   const [voiceError, setVoiceError] = useState("");
+  const [presetSounds, setPresetSounds] = useState<PresetSound[]>([]);
 
   useEffect(() => {
     if (draft) setRenderPlan(draft);
   }, [draft, setRenderPlan]);
+
+  useEffect(() => {
+    async function loadPresetSounds() {
+      try {
+        const response = await fetch("/api/sounds");
+        const data = (await response.json()) as { sounds?: PresetSound[] };
+        if (Array.isArray(data.sounds)) {
+          setPresetSounds(data.sounds);
+        }
+      } catch (error) {
+        console.error("Failed to load preset sounds:", error);
+      }
+    }
+    loadPresetSounds();
+  }, []);
 
   if (!draft) {
     return (
@@ -192,6 +218,7 @@ export default function EditorPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           scenes: draft?.scenes.map((item) => item.narration) ?? [],
+          speed: voiceSpeed,
           style: voiceStyle,
           voice,
         }),
@@ -382,6 +409,19 @@ export default function EditorPage() {
                   </button>
                 );
               })}
+              <div
+                title="Default closing video appended at the end of every video"
+                className="w-28 shrink-0 overflow-hidden border border-slate-200 bg-slate-900 text-left"
+              >
+                <video
+                  className="aspect-[9/11] w-full object-cover"
+                  muted
+                  src="/api/assets/closing-video"
+                />
+                <span className="block truncate bg-slate-950 px-2 py-1.5 text-xs font-semibold text-slate-300">
+                  Outro ({CLOSING_VIDEO_DURATION_SECONDS}s)
+                </span>
+              </div>
             </div>
           </section>
 
@@ -519,7 +559,7 @@ export default function EditorPage() {
               ) : null}
             </div>
 
-            <div className="grid gap-4 p-4 sm:grid-cols-2">
+            <div className="grid gap-4 p-4 sm:grid-cols-3">
               <label className="text-sm font-semibold text-slate-700">
                 Voice
                 <select
@@ -554,11 +594,28 @@ export default function EditorPage() {
                 </select>
               </label>
 
+              <label className="text-sm font-semibold text-slate-700">
+                Speech speed
+                <select
+                  value={voiceSpeed}
+                  onChange={(event) =>
+                    setVoiceSpeed(event.target.value as VoiceSpeed)
+                  }
+                  className="mt-2 h-10 w-full rounded-md border border-slate-300 bg-white px-3 font-normal outline-none focus:border-cyan-600"
+                >
+                  {VOICE_SPEEDS.map((speedOption) => (
+                    <option value={speedOption.value} key={speedOption.value}>
+                      {speedOption.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               <button
                 type="button"
                 disabled={isGeneratingVoice}
                 onClick={generateVoice}
-                className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-wait disabled:bg-slate-400 sm:col-span-2"
+                className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-cyan-700 disabled:cursor-wait disabled:bg-slate-400 sm:col-span-3"
               >
                 {isGeneratingVoice ? (
                   <LoaderCircle className="animate-spin" size={17} />
@@ -573,7 +630,7 @@ export default function EditorPage() {
               </button>
 
               {voiceError ? (
-                <p className="border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 sm:col-span-2">
+                <p className="border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 sm:col-span-3">
                   {voiceError}
                 </p>
               ) : null}
@@ -634,8 +691,24 @@ export default function EditorPage() {
             </div>
 
             <div className="grid gap-4 p-4 sm:grid-cols-2">
+              <label className="text-sm font-semibold text-slate-700 sm:col-span-2">
+                Preset audio track
+                <select
+                  value={draft.musicUrl}
+                  onChange={(event) => updateMusic({ musicUrl: event.target.value })}
+                  className="mt-2 h-10 w-full rounded-md border border-slate-300 bg-white px-3 font-normal outline-none focus:border-cyan-600"
+                >
+                  <option value="">Select a preset track from assets/sounds...</option>
+                  {presetSounds.map((sound) => (
+                    <option value={sound.url} key={sound.filename}>
+                      {sound.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                <Upload size={16} /> Choose audio
+                <Upload size={16} /> Upload custom track
                 <input
                   type="file"
                   accept="audio/*"
@@ -647,8 +720,14 @@ export default function EditorPage() {
               <input
                 type="url"
                 aria-label="Remote music URL"
-                placeholder="https://.../music.mp3"
-                value={draft.musicUrl.startsWith("data:") ? "" : draft.musicUrl}
+                placeholder="Or paste music URL (https://...)"
+                value={
+                  draft.musicUrl.startsWith("data:") ||
+                  draft.musicUrl.startsWith("/api/sounds/") ||
+                  draft.musicUrl.startsWith("/sounds/")
+                    ? ""
+                    : draft.musicUrl
+                }
                 onChange={(event) => updateMusic({ musicUrl: event.target.value })}
                 className="h-10 min-w-0 rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-cyan-600"
               />

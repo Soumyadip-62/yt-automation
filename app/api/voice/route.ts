@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { generateVoiceover } from "@/lib/voice";
 import {
   isVoiceName,
+  isVoiceSpeed,
   isVoiceStyle,
   type VoiceName,
+  type VoiceSpeed,
   type VoiceStyle,
 } from "@/lib/voice-config";
 
@@ -12,6 +14,7 @@ export const maxDuration = 120;
 
 type VoiceRequest = {
   scenes?: unknown;
+  speed?: unknown;
   style?: unknown;
   voice?: unknown;
 };
@@ -32,16 +35,18 @@ export async function POST(request: Request) {
       scenes.some((scene) => !scene) ||
       totalLength > 10_000 ||
       !isVoiceName(body.voice) ||
-      !isVoiceStyle(body.style)
+      !isVoiceStyle(body.style) ||
+      (body.speed !== undefined && !isVoiceSpeed(body.speed))
     ) {
       return NextResponse.json(
-        { error: "Provide a script, supported voice, and narration style." },
+        { error: "Provide a script, supported voice, speed, and narration style." },
         { status: 400 },
       );
     }
 
     const result = await generateVoiceover({
       scenes,
+      speed: body.speed as VoiceSpeed | undefined,
       style: body.style as VoiceStyle,
       voice: body.voice as VoiceName,
     });

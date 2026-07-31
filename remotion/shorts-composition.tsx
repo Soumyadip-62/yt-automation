@@ -4,6 +4,7 @@ import {
   Img,
   interpolate,
   Sequence,
+  staticFile,
   useCurrentFrame,
   Video,
 } from "remotion";
@@ -40,15 +41,16 @@ export const defaultRenderPlan: RenderPlan = {
   wordTimings: [],
 };
 
+export const CLOSING_VIDEO_DURATION_SECONDS = 3;
+
 export function getDurationInFrames(plan: RenderPlan) {
-  return Math.max(
-    1,
-    plan.scenes.reduce(
-      (total, scene) =>
-        total + Math.max(1, Math.round(scene.duration * VIDEO_FPS)),
-      0,
-    ),
+  const mainScenesFrames = plan.scenes.reduce(
+    (total, scene) =>
+      total + Math.max(1, Math.round(scene.duration * VIDEO_FPS)),
+    0,
   );
+  const closingFrames = Math.round(CLOSING_VIDEO_DURATION_SECONDS * VIDEO_FPS);
+  return Math.max(1, mainScenesFrames + closingFrames);
 }
 
 function getMotionStyle(
@@ -294,6 +296,34 @@ export function ShortsComposition(plan: RenderPlan) {
           </Sequence>
         );
       })}
+      {(() => {
+        const mainScenesFrames = plan.scenes.reduce(
+          (total, scene) =>
+            total + Math.max(1, Math.round(scene.duration * VIDEO_FPS)),
+          0,
+        );
+        const closingFrames = Math.round(
+          CLOSING_VIDEO_DURATION_SECONDS * VIDEO_FPS,
+        );
+
+        if (closingFrames <= 0) return null;
+
+        return (
+          <Sequence
+            durationInFrames={closingFrames}
+            from={mainScenesFrames}
+            name="Outro / Closing Video"
+          >
+            <AbsoluteFill style={{ backgroundColor: "#020617", overflow: "hidden" }}>
+              <Video
+                muted
+                src={staticFile("closing_video.mp4")}
+                style={{ height: "100%", objectFit: "cover", width: "100%" }}
+              />
+            </AbsoluteFill>
+          </Sequence>
+        );
+      })()}
     </AbsoluteFill>
   );
 }

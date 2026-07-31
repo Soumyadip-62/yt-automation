@@ -1,5 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
-import type { VoiceName, VoiceStyle } from "@/lib/voice-config";
+import {
+  getVoiceSpeedPrompt,
+  type VoiceName,
+  type VoiceSpeed,
+  type VoiceStyle,
+} from "@/lib/voice-config";
 import type { SceneTiming, WordTiming } from "@/types/render-plan";
 
 const SAMPLE_RATE = 24_000;
@@ -34,16 +39,19 @@ function pcmToWav(pcm: Buffer) {
 async function generatePcm({
   ai,
   narration,
+  speed,
   style,
   voice,
 }: {
   ai: GoogleGenAI;
   narration: string;
+  speed?: VoiceSpeed;
   style: VoiceStyle;
   voice: VoiceName;
 }) {
+  const speedPrompt = getVoiceSpeedPrompt(speed);
   const prompt = `Read the transcript exactly as written. Do not add or remove words. Pause briefly between paragraphs.
-Voice direction: ${style} educational YouTube Short narration. Natural pacing, clear pronunciation, engaging delivery.
+Voice direction: ${style} educational YouTube Short narration. ${speedPrompt} Clear pronunciation, engaging delivery.
 
 Transcript:
 ${narration}`;
@@ -131,10 +139,12 @@ function getWordTimings(
 
 export async function generateVoiceover({
   scenes,
+  speed,
   style,
   voice,
 }: {
   scenes: string[];
+  speed?: VoiceSpeed;
   style: VoiceStyle;
   voice: VoiceName;
 }) {
@@ -142,7 +152,7 @@ export async function generateVoiceover({
   const sceneTimings: SceneTiming[] = [];
   const wordTimings: WordTiming[] = [];
   const narration = scenes.join("\n\n");
-  const pcm = await generatePcm({ ai, narration, style, voice });
+  const pcm = await generatePcm({ ai, narration, speed, style, voice });
   const durationSeconds = pcm.length / BYTES_PER_SECOND;
   const sceneWeights = scenes.map(getNarrationWeight);
   const totalWeight = sceneWeights.reduce((total, weight) => total + weight, 0);

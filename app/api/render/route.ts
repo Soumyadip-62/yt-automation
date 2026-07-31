@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 import { mkdir } from "node:fs/promises";
 import { bundle } from "@remotion/bundler";
@@ -39,6 +40,7 @@ function isRemoteHttpsUrl(value: unknown): boolean {
 
 function isAudioSource(value: string) {
   return (
+    value.startsWith("/") ||
     isRemoteHttpsUrl(value) ||
     (value.length <= 30_000_000 &&
       /^data:audio\/[a-zA-Z0-9.+-]+;base64,[a-zA-Z0-9+/=]+$/.test(value))
@@ -80,21 +82,23 @@ function hasValidTimings(plan: Partial<RenderPlan>) {
   );
 }
 
-function validateRenderPlan(value: unknown): value is RenderPlan {
-  if (!value || typeof value !== "object") return false;
+function isValidMediaUrl(value: unknown): boolean {
+  if (typeof value !== "string") return false;
+  return value.startsWith("/") || isRemoteHttpsUrl(value) || value.startsWith("data:");
+}
+
+function getRenderPlanError(value: unknown): string | null {
+  if (!value || typeof value !== "object") return "Render plan payload is empty.";
 
   const plan = value as Partial<RenderPlan>;
+  if (typeof plan.script !== "string") return "Missing script string.";
+  if (!plan.metadata) return "Missing video metadata.";
+  if (!Array.isArray(plan.scenes) || plan.scenes.length === 0) return "Script has no scenes.";
+  if (plan.scenes.length > 20) return "Too many scenes (max 20).";
+  if (!plan.selectedAssetsByScene) return "Missing selected assets mapping.";
+  if (typeof plan.audioUrl !== "string" || !isUnitValue(plan.audioVolume)) return "Invalid audio settings.";
+  if (plan.audioUrl !== "" && !isAudioSource(plan.audioUrl)) return "Invalid voiceover audio source.";
   if (
-    typeof plan.script !== "string" ||
-    !plan.metadata ||
-    !Array.isArray(plan.scenes) ||
-    plan.scenes.length === 0 ||
-    plan.scenes.length > 20 ||
-    !plan.selectedAssetsByScene ||
-    typeof plan.audioUrl !== "string" ||
-    typeof plan.audioLoop !== "boolean" ||
-    !isUnitValue(plan.audioVolume) ||
-    (plan.audioUrl !== "" && !isAudioSource(plan.audioUrl)) ||
     typeof plan.musicUrl !== "string" ||
     typeof plan.musicLoop !== "boolean" ||
     !isUnitValue(plan.musicVolume) ||
@@ -104,43 +108,67 @@ function validateRenderPlan(value: unknown): value is RenderPlan {
     plan.musicFadeInSeconds > 10 ||
     typeof plan.musicFadeOutSeconds !== "number" ||
     plan.musicFadeOutSeconds < 0 ||
-    plan.musicFadeOutSeconds > 10 ||
-    (plan.musicUrl !== "" && !isAudioSource(plan.musicUrl)) ||
-    !hasValidTimings(plan) ||
-    !Array.isArray(plan.wordTimings) ||
-    plan.wordTimings.length > 2_000
-  ) {
-    return false;
+    plan.musicFadeOutSeconds > 10
+  ) return "Invalid background music settings.";
+  if (plan.musicUrl !== "" && !isAudioSource(plan.musicUrl)) return "Invalid background music URL.";
+  if (!hasValidTimings(plan)) return "Invalid scene or word timings format.";
+
+  for (let index = 0; index < plan.scenes.length; index += 1) {
+    const scene = plan.scenes[index];
+    const asset = plan.selectedAssetsByScene?.[index];
+    if (!scene || typeof scene.caption !== "string") return `Scene ${index + 1} has invalid caption.`;
+    if (typeof scene.duration !== "number" || scene.duration < 0.25 || scene.duration > 30) return `Scene ${index + 1} duration must be between 0.25s and 30s.`;
+    if (!asset) return `Scene ${index + 1} has no selected asset. Choose an asset for every scene.`;
+    if (!isValidMediaUrl(asset.assetsurl)) return `Scene ${index + 1} asset URL is invalid.`;
+    if (asset.mediaType !== "image" && asset.mediaType !== "video") return `Scene ${index + 1} asset media type is invalid.`;
   }
 
-  return plan.scenes.every((scene, index) => {
-    const asset = plan.selectedAssetsByScene?.[index];
-    return (
-      typeof scene.caption === "string" &&
-      typeof scene.duration === "number" &&
-      scene.duration >= 0.25 &&
-      scene.duration <= 30 &&
-      Boolean(asset) &&
-      isRemoteHttpsUrl(asset?.assetsurl) &&
-      (asset?.mediaType === "image" || asset?.mediaType === "video")
-    );
-  });
+  return null;
 }
 
 export async function POST(request: Request) {
   try {
-    const plan = (await request.json()) as unknown;
+    const rawPlan = (await request.json()) as unknown;
+    const validationError = getRenderPlanError(rawPlan);
 
-    if (!validateRenderPlan(plan)) {
+    if (validationError) {
       return NextResponse.json(
-        {
-          error:
-            "Invalid render plan. Select every scene asset and use HTTPS media URLs.",
-        },
+        { error: validationError },
         { status: 400 },
       );
     }
 
+    const plan = JSON.parse(JSON.stringify(rawPlan)) as RenderPlan;
+
+    if (
+      plan.musicUrl &&
+      (plan.musicUrl.startsWith("/sounds/") ||
+        plan.musicUrl.startsWith("/api/sounds/"))
+    ) {
+      const filename = path.basename(decodeURIComponent(plan.musicUrl));
+      const publicPath = path.join(process.cwd(), "public", "sounds", filename);
+      const assetsPath = path.join(process.cwd(), "assets", "sounds", filename);
+      const filePath = fs.existsSync(publicPath)
+        ? publicPath
+        : fs.existsSync(assetsPath)
+          ? assetsPath
+          : null;
+
+      if (filePath) {
+        const fileBuffer = fs.readFileSync(filePath);
+        const ext = path.extname(filename).toLowerCase();
+        const mimeType =
+          ext === ".wav"
+            ? "audio/wav"
+            : ext === ".ogg"
+              ? "audio/ogg"
+              : ext === ".m4a" || ext === ".aac"
+                ? "audio/mp4"
+                : "audio/mpeg";
+
+        plan.musicUrl = `data:${mimeType};base64,${fileBuffer.toString("base64")}`;
+      }
+    }
     const serveUrl = await getBundle();
     const composition = await selectComposition({
       id: COMPOSITION_ID,
