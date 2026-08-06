@@ -17,13 +17,13 @@ export function CopyButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex cursor-pointer items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 active:bg-slate-100"
+      className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-slate-300 transition hover:border-slate-600 hover:bg-slate-800 hover:text-slate-100 active:bg-slate-700"
     >
       {copied ? (
         <>
           {showIcon ? (
             <svg
-              className="h-3.5 w-3.5 text-emerald-600"
+              className="h-3.5 w-3.5 text-emerald-400"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -36,13 +36,13 @@ export function CopyButton({
               />
             </svg>
           ) : null}
-          <span className="font-semibold text-emerald-700">{copiedLabel}</span>
+          <span className="font-semibold text-emerald-400">{copiedLabel}</span>
         </>
       ) : (
         <>
           {showIcon ? (
             <svg
-              className="h-3.5 w-3.5"
+              className="h-3.5 w-3.5 text-slate-400"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"

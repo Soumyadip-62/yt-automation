@@ -16,21 +16,21 @@ export function MetadataTab({
     <div className="flex flex-col gap-6 p-5">
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-700">Video Title</h3>
+          <h3 className="text-sm font-semibold text-slate-300">Video Title</h3>
           <CopyButton
             copied={copiedField === "title"}
             label="Copy Title"
             onClick={() => onCopy(metadata.title, "title")}
           />
         </div>
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-4 font-semibold text-slate-900">
+        <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 font-semibold text-slate-100">
           {metadata.title || "No title generated"}
         </div>
       </div>
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-700">
+          <h3 className="text-sm font-semibold text-slate-300">
             Video Description
           </h3>
           <CopyButton
@@ -39,14 +39,14 @@ export function MetadataTab({
             onClick={() => onCopy(metadata.description, "description")}
           />
         </div>
-        <p className="whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-relaxed text-slate-700">
+        <p className="whitespace-pre-wrap rounded-lg border border-slate-800 bg-slate-950 p-4 text-sm leading-relaxed text-slate-300">
           {metadata.description || "No description generated"}
         </p>
       </div>
 
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-700">Hashtags</h3>
+          <h3 className="text-sm font-semibold text-slate-300">Hashtags</h3>
           <CopyButton
             copied={copiedField === "hashtags"}
             copiedLabel="Copied All!"
@@ -54,21 +54,21 @@ export function MetadataTab({
             onClick={() => onCopy(metadata.hashtags.join(" "), "hashtags")}
           />
         </div>
-        <div className="flex flex-wrap gap-2 rounded-md border border-slate-200 bg-slate-50 p-4">
+        <div className="flex flex-wrap gap-2 rounded-lg border border-slate-800 bg-slate-950 p-4">
           {metadata.hashtags && metadata.hashtags.length > 0 ? (
             metadata.hashtags.map((tag, idx) => (
               <button
                 key={idx}
                 type="button"
                 onClick={() => onCopy(tag, `tag-${idx}`)}
-                className="cursor-pointer rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-800 transition hover:border-cyan-300 hover:bg-cyan-100"
+                className="cursor-pointer rounded-full border border-cyan-800/80 bg-cyan-950/60 px-3 py-1 text-xs font-medium text-cyan-300 transition hover:border-cyan-700 hover:bg-cyan-900/80"
                 title="Click to copy this hashtag"
               >
                 {tag} {copiedField === `tag-${idx}` ? "✓" : ""}
               </button>
             ))
           ) : (
-            <span className="text-sm text-slate-400">
+            <span className="text-sm text-slate-500">
               No hashtags generated
             </span>
           )}

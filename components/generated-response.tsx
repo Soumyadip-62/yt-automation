@@ -46,17 +46,17 @@ export function GeneratedResponse({
   return (
     <section
       aria-live="polite"
-      className="flex min-h-[520px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
+      className="flex min-h-[520px] flex-col overflow-hidden rounded-xl border border-slate-800 bg-slate-900/80 shadow-xl shadow-slate-950/50 backdrop-blur-md"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/50 px-5 py-4">
-        <h2 className="text-lg font-semibold">Generated response</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900/90 px-5 py-4">
+        <h2 className="text-lg font-semibold text-slate-100">Generated response</h2>
         <div className="flex items-center gap-2">
           {data ? (
             <button
               type="button"
               disabled={!canEditVideo}
               onClick={onEditVideo}
-              className="flex h-9 cursor-pointer items-center gap-2 rounded-md bg-slate-950 px-3 text-sm font-semibold text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="flex h-9 cursor-pointer items-center gap-2 rounded-lg bg-cyan-600 px-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-cyan-500 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
               title={
                 canEditVideo
                   ? "Open video editor"
@@ -67,7 +67,7 @@ export function GeneratedResponse({
               Edit &amp; render
             </button>
           ) : null}
-          <span className="rounded-md border border-cyan-100 bg-cyan-50 px-3 py-1 text-sm font-medium text-cyan-700">
+          <span className="rounded-lg border border-cyan-800/80 bg-cyan-950/60 px-3 py-1 text-sm font-medium text-cyan-300">
             Gemini
           </span>
         </div>
@@ -77,7 +77,7 @@ export function GeneratedResponse({
         <div className="flex flex-1 flex-col">
           <ResponseTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-          <div className="flex-1 bg-white">
+          <div className="flex-1 bg-slate-900/60">
             {activeTab === "script" ? (
               <ScriptTab
                 copiedField={copiedField}
@@ -112,7 +112,7 @@ export function GeneratedResponse({
         </div>
       ) : (
         <div className="flex flex-1 p-5">
-          <div className="flex w-full items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-slate-500">
+          <div className="flex w-full items-center justify-center rounded-xl border border-dashed border-slate-800 bg-slate-950/60 p-8 text-center text-slate-400">
             {isLoading
               ? "Generating script..."
               : "Enter a topic and generate your YouTube Shorts script."}
